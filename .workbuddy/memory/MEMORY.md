@@ -47,11 +47,11 @@
 | 文档类型 | v1.1 路径 |
 |---------|---------|
 | 工作流 | `游戏研发工作流文档_v1.1_叙事强化配套版.md`（根目录） |
-| GDD | `docs/phase1/qiqinmenghuo_phase1_narrative_docs_v1.1/qiqinmenghuo_docs_v1.1_enhanced/GDD.md` |
-| 世界观圣经 | `...enhanced/world-bible.md` |
-| 关卡叙事大纲 | `...enhanced/level-narrative.md` |
-| 角色设定表 | `...enhanced/character-sheets.md` |
-| 入口索引 | `...enhanced/README.md` |
+| GDD | `docs/phase1/qiqinmenghuo_phase1_narrative_docs_v1.1/GDD.md` |
+| 世界观圣经 | `docs/phase1/qiqinmenghuo_phase1_narrative_docs_v1.1/world-bible.md` |
+| 关卡叙事大纲 | `docs/phase1/qiqinmenghuo_phase1_narrative_docs_v1.1/level-narrative.md` |
+| 角色设定表 | `docs/phase1/qiqinmenghuo_phase1_narrative_docs_v1.1/character-sheets.md` |
+| 入口索引 | `docs/phase1/qiqinmenghuo_phase1_narrative_docs_v1.1/README.md` |
 
 **v1.1 关键约束**：
 - Phase 2 MVP = 第1关纵切（先纵切后铺量，不可同时做7关）
@@ -80,6 +80,76 @@
 
 - 格式：SVG壳 + base64 PNG（1672×941），AI图像生成
 - 提示词来源：`docs/phase1/visuals/enhanced_md_prompts/`
+
+## Phase 2 模块架构（5层分层）
+
+> 设计文档：`docs/phase2/architecture.md` | 设计日期：2026-06-12  
+> 核心原则：场景即入口 / System 无状态 / Entity 自包含 / Data 驱动 / 接口先于实现
+
+### 第1层 — Scenes（场景层，5个模块）
+| 模块 | 职责 | Phase 2 覆盖度 |
+|------|------|---------------|
+| **BootScene** | 启动加载、进度条、跳转主菜单 | 完整 |
+| **MainMenuScene** | 主菜单、开始游戏 | 基础 |
+| **Level1Scene** | 第1关场景组装与生命周期 | ⭐ 完整（核心） |
+| **CutScene** | 图文过场播放 | 完整 |
+| **ResultScene** | 结算展示 | 完整 |
+
+### 第2层 — UI（界面层，4个模块）
+| 模块 | 职责 | Phase 2 覆盖度 |
+|------|------|---------------|
+| **HUD** | 血条/武器/碎片显示 | 完整 |
+| **DialogBox** | 对话框渲染 | 完整 |
+| **BossHealthBar** | Boss 血条 | 完整 |
+| **ResultScreen** | 结算面板 | 完整 |
+
+### 第3层 — Systems（系统服务层，9个模块）
+| 模块 | 职责 | Phase 2 覆盖度 |
+|------|------|---------------|
+| **InputManager** | 键盘输入统一管理 | 完整 |
+| **DialogSystem** | 对话触发/显示/跳过 | 完整 |
+| **WeaponSystem** | 武器切换/弹幕管理 | 基础（仅基础弩箭） |
+| **CaptureSystem** | 擒获状态机 | ⭐ 完整（核心差异化） |
+| **SaveSystem** | LocalStorage 存取 | 完整 |
+| **StorySystem** | 碎片收集/图鉴 | 基础（1个碎片） |
+| **CameraSystem** | 镜头跟随/锁镜头 | 完整 |
+| **AudioManager** | 音效播放（含空实现占位） | 基础 |
+| **ScreenShake** | 屏幕震动 | 完整 |
+
+### 第4层 — Entities（实体层，3个模块）
+| 模块 | 职责 | Phase 2 覆盖度 |
+|------|------|---------------|
+| **Player** | 移动/跳跃/射击/状态机 | ⭐ 完整（核心） |
+| **Enemy** | 蛮兵基类：巡逻/受击/死亡 | 完整 |
+| **BossMengHuoL1** | 骑象 Boss：冲锋/踏地/横扫 | ⭐ 完整（核心） |
+
+### 第5层 — Core/Utils（核心基础设施层，3个模块）
+| 模块 | 职责 | Phase 2 覆盖度 |
+|------|------|---------------|
+| **EventBus** | 全局事件发布/订阅，解耦模块通信 | 完整 |
+| **AssetLoader** | 资源加载 + 灰盒 fallback | 完整 |
+| **GameContext** | 全局上下文（存档引用、系统引用） | 完整 |
+
+### 架构约束（四大通信模式）
+- Entity → UI：Entity 发事件 → Scene 监听 → 更新 UI
+- Scene → System：Scene 直接调用 System 方法
+- System → Scene：System 发事件 → Scene 监听
+- Entity → Entity：通过 EventBus 间接通信
+
+### 开发批次（11个 Batch）
+- Batch 0：工程搭建 + EventBus
+- Batch 1-2：Player 移动 + 射击（操作闭环）
+- Batch 3：Enemy + 灰盒地图
+- Batch 4-5：Camera + HUD + Boss（可并行 Batch 6）
+- Batch 6：DialogSystem
+- Batch 7：CaptureSystem ← 核心集成点
+- Batch 8-11：Save + Result + Menu + Audio
+
+### 四大接口约定
+1. **对话 ID 触发**：`DIALOG_TRIGGER_L1_INTRO` 等常量触发对话
+2. **Manifest 登记**：所有资源在 `asset-manifest.json` 登记，缺失自动退化灰盒
+3. **配置化**：地图/敌人/Boss 行为全部从 JSON 加载，不硬编码
+4. **AI fallback**：AI 台词有本地模板兜底，不允许 API 阻塞主流程
 
 ## Ardot 设计
 
