@@ -26,6 +26,12 @@ export class Bullet extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
     body.setCollideWorldBounds(true); // 越界即触发 worldbounds 事件
+
+    // 碰撞体：上下大幅延伸避免垂直不重叠（敌人身体可能偏下）
+    // 14×20 覆盖玩家枪口高度到敌人躯干高度的大范围
+    body.setSize(14, 20);
+    body.setOffset(-3, -8);
+
     this.setDepth(9);
     this._lifetimeMs = lifetimeMs;
   }

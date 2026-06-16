@@ -2,7 +2,7 @@
 // Level1Scene.ts — 第 1 关「西洱河初战」场景（Batch 1 灰盒版）
 // 当前进度：灰盒地图 + Player 移动跳跃
 // Batch 2 追加：WeaponSystem + 射击
-// Batch 3 追加：Enemy + 真实地图资源
+// Batch 3 追加：Enemy 实体（巡逻/追击/受击/死亡）
 // Batch 4 追加：Camera / HUD
 // Batch 6 追加：DialogSystem
 // Batch 7 追加：CaptureSystem
@@ -11,6 +11,7 @@
 import Phaser from 'phaser';
 import { Player } from '../entities/Player';
 import { Bullet } from '../entities/Bullet';
+import { Enemy } from '../entities/Enemy';
 import { InputManager } from '../systems/InputManager';
 import { WeaponSystem } from '../systems/WeaponSystem';
 import { EventBus } from '../core/EventBus';
@@ -42,6 +43,9 @@ export class Level1Scene extends Phaser.Scene {
 
   // ── 物理组 ────────────────────────────────────────
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
+  private enemyGroup!: Phaser.Physics.Arcade.Group;
+  private _totalEnemies = 0;
+  private _liveEnemies   = 0;
 
   // ── 调试 UI ───────────────────────────────────────
   private debugText!: Phaser.GameObjects.Text;
@@ -66,14 +70,16 @@ export class Level1Scene extends Phaser.Scene {
     this.buildMap();
     this.spawnPlayer();
     this.setupWeaponSystem();
+    this.spawnEnemies();
     this.setupCamera();
     this.setupCollisions();
     this.setupEventListeners();
     this.buildDebugUI();
 
     this.bus.emit(GameEvent.LEVEL_START, { levelId: 'level_01' });
-    console.log('[Level1Scene] ✅ Batch 2 — 灰盒地图 + Player + 射击就绪');
-    console.log('  WASD/方向键移动，Space/W/↑ 跳跃，J/Z 射击');
+    console.log('[Level1Scene] ✅ Batch 3 — 地图 + Player + 射击 + 敌人就绪');
+    console.log('  WASD/方向键移动，Space/W/↑ 跳跃，J/Z 射击（八方向弩箭）');
+    console.log(`  敌人数：${this._totalEnemies}`);
   }
 
   // ─────────────────────────────────────────────────
@@ -88,6 +94,7 @@ export class Level1Scene extends Phaser.Scene {
       this.player.x, this.player.y,
       this.player.facingRight,
     );
+    this.updateEnemies(delta);
     this.updateDebugUI();
   }
 
@@ -129,6 +136,8 @@ export class Level1Scene extends Phaser.Scene {
     makeRect('sky_bg', MAP_WIDTH, GAME_HEIGHT, 0x0a1a2a);
     // 子弹：亮黄色 8×4
     makeRect('bullet_placeholder', 8, 4, 0xffdd44);
+    // 敌人：暗红色 24×40，橙色边框
+    makeRect('enemy_placeholder', 24, 40, 0xaa2222, 0xff6644);
     console.log('[纹理] 灰盒贴图生成完毕');
   }
 
@@ -199,6 +208,53 @@ export class Level1Scene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────
+  // 敌人生成（Batch 3）
+  // ─────────────────────────────────────────────────
+  private spawnEnemies(): void {
+    this.enemyGroup = this.physics.add.group({ runChildUpdate: false });
+
+    // 敌人放置点（pixel 坐标，出生后受重力落到地面 / 平台）
+    const spawns: { x: number; y: number }[] = [
+      // 地面蛮兵（y 略高于地面，重力自动下落）
+      { x: 400,  y: GROUND_Y - 80 },
+      { x: 800,  y: GROUND_Y - 80 },
+      { x: 1200, y: GROUND_Y - 80 },
+      { x: 1700, y: GROUND_Y - 80 },
+      { x: 2200, y: GROUND_Y - 80 },
+      // 平台蛮兵（出生在第一个宽平台上方）
+      { x: 700,  y: GAME_HEIGHT - 210 },
+    ];
+
+    for (const s of spawns) {
+      const enemy = new Enemy(this, s.x, s.y);
+      this.enemyGroup.add(enemy);
+    }
+
+    this._totalEnemies = spawns.length;
+    this._liveEnemies   = spawns.length;
+  }
+
+  // ─────────────────────────────────────────────────
+  // 敌人帧更新 + 清理（Bullet Group 同款模式）
+  // ─────────────────────────────────────────────────
+  private updateEnemies(delta: number): void {
+    const enemies = this.enemyGroup.getChildren() as Enemy[];
+    const toCleanup: Enemy[] = [];
+
+    for (const e of enemies) {
+      if (!e.active) {
+        toCleanup.push(e);
+        continue;
+      }
+      e.updateEnemy(delta, this.player.x, this.player.y);
+    }
+
+    for (const e of toCleanup) {
+      this.enemyGroup.remove(e, false, false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────
   // 物理碰撞
   // ─────────────────────────────────────────────────
   private setupCollisions(): void {
@@ -206,6 +262,40 @@ export class Level1Scene extends Phaser.Scene {
     this.physics.add.collider(
       this.player as unknown as Phaser.Physics.Arcade.Sprite,
       this.platforms,
+    );
+
+    // 敌人 ↔ 平台（站在地面上 / 平台上）
+    this.physics.add.collider(this.enemyGroup, this.platforms);
+
+    // 玩家 ↔ 敌人（接触伤害，Player.invincible 提供内置冷却）
+    this.physics.add.overlap(
+      this.player as unknown as Phaser.Physics.Arcade.Sprite,
+      this.enemyGroup,
+      () => { this.player.takeDamage(1, 'enemy'); },
+      (_player, enemy) => {
+        const e = enemy as unknown as Enemy;
+        return e.active && !e.isDefeated;
+      },
+      this,
+    );
+
+    // 子弹 ↔ 敌人（命中击杀）
+    // processCallback 防御：确保双方 active 且敌人未死亡
+    this.physics.add.overlap(
+      this.weaponSys.getBulletGroup(),
+      this.enemyGroup,
+      (bullet, enemy) => {
+        const b = bullet as unknown as Bullet;
+        const e = enemy as unknown as Enemy;
+        e.takeDamage(b.damage);
+        b.onHit();
+      },
+      (bullet, enemy) => {
+        const b = bullet as unknown as Bullet;
+        const e = enemy as unknown as Enemy;
+        return b.active && e.active && !e.isDefeated;
+      },
+      this,
     );
 
     // 子弹 ↔ 平台（命中即销毁）
@@ -241,9 +331,19 @@ export class Level1Scene extends Phaser.Scene {
   private setupEventListeners(): void {
     // 关卡重启（玩家死亡触发）
     this.bus.on(GameEvent.LEVEL_RESTART, (_payload) => {
-      // 清理 EventBus 避免重复订阅
       this.bus.clear();
       this.scene.restart();
+    });
+
+    // 敌人击杀——追踪全清
+    this.bus.on(GameEvent.ENEMY_DEFEATED, () => {
+      this._liveEnemies = Math.max(0, this._liveEnemies - 1);
+      if (this._liveEnemies <= 0) {
+        this.bus.emit(GameEvent.ALL_ENEMIES_CLEARED, {
+          count: this._totalEnemies,
+        });
+        console.log('[Level1Scene] 🎉 所有敌人已消灭！');
+      }
     });
   }
 
@@ -276,13 +376,14 @@ export class Level1Scene extends Phaser.Scene {
       ? `[${'='.repeat(Math.round((1 - cd) * 10))}${' '.repeat(Math.round(cd * 10))}]`
       : '[==========]';
     this.debugText.setText([
-      `[Batch 2] 西洱河初战 — 移动+射击`,
+      `[Batch 3] 西洱河初战 — 移动+射击+敌人`,
       `State: ${this.player.playerState}`,
       `Pos:   ${Math.round(this.player.x)}, ${Math.round(this.player.y)}`,
       `Vel:   ${Math.round(body.velocity.x)}, ${Math.round(body.velocity.y)}`,
       `OnGnd: ${body.blocked.down}`,
       `HP:    ${this.player.hp} / ${this.player.maxHp}`,
       `Shot:  ${cdBar}`,
+      `Enemy: ${this._liveEnemies} / ${this._totalEnemies}`,
     ]);
   }
 
@@ -292,6 +393,7 @@ export class Level1Scene extends Phaser.Scene {
   shutdown(): void {
     this.inputMgr?.destroy();
     this.weaponSys?.destroy();
+    this.enemyGroup?.destroy(true);
     this.bus.clear();
   }
 
