@@ -16,6 +16,7 @@ const MAX_HP             = 5;
 const INVINCIBLE_MS      = 800;   // 受伤后无敌时间
 const COYOTE_TIME_MS     = 100;   // 土狼时间（离地后仍可起跳的宽容窗口）
 const JUMP_BUFFER_MS     = 100;   // 跳跃缓冲（落地前提前按跳也生效）
+const SHOOT_DISPLAY_MS   = 200;   // 射击状态持续 ms（视觉反馈窗口）
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   // ── 状态 ──────────────────────────────────────────
@@ -25,6 +26,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private _invincibleTimer = 0;   // 无敌剩余 ms
   private _coyoteTimer     = 0;   // 土狼时间剩余 ms
   private _jumpBufferTimer = 0;   // 跳跃缓冲剩余 ms
+  private _shootTimer      = 0;   // 射击表态剩余 ms（Batch 2）
   private _wasOnGround     = false;
 
   private bus = EventBus.getInstance();
@@ -63,6 +65,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this._jumpBufferTimer = JUMP_BUFFER_MS;
     }
     this._jumpBufferTimer = Math.max(0, this._jumpBufferTimer - delta);
+    this._shootTimer      = Math.max(0, this._shootTimer - delta);
+    if (input.shootJustPressed) {
+      this._shootTimer = SHOOT_DISPLAY_MS;
+    }
 
     // ── 水平移动 ──
     if (input.left) {
@@ -113,7 +119,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     const moving = Math.abs(body.velocity.x) > 10;
 
-    if (!onGround && body.velocity.y < 0) {
+    if (this._shootTimer > 0) {
+      next = PlayerState.SHOOT;       // 射击态优先（瞬时覆盖）
+    } else if (!onGround && body.velocity.y < 0) {
       next = PlayerState.JUMP;
     } else if (!onGround && body.velocity.y > 50) {
       next = PlayerState.FALL;

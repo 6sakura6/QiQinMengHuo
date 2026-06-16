@@ -10,7 +10,9 @@
 
 import Phaser from 'phaser';
 import { Player } from '../entities/Player';
+import { Bullet } from '../entities/Bullet';
 import { InputManager } from '../systems/InputManager';
+import { WeaponSystem } from '../systems/WeaponSystem';
 import { EventBus } from '../core/EventBus';
 import { GameEvent } from '../types/events.types';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../config/constants';
@@ -35,6 +37,7 @@ export class Level1Scene extends Phaser.Scene {
   // ── 模块引用 ──────────────────────────────────────
   private player!: Player;
   private inputMgr!: InputManager;
+  private weaponSys!: WeaponSystem;
   private bus = EventBus.getInstance();
 
   // ── 物理组 ────────────────────────────────────────
@@ -62,13 +65,15 @@ export class Level1Scene extends Phaser.Scene {
     this.buildGrayboxTextures();
     this.buildMap();
     this.spawnPlayer();
+    this.setupWeaponSystem();
     this.setupCamera();
+    this.setupCollisions();
     this.setupEventListeners();
     this.buildDebugUI();
 
     this.bus.emit(GameEvent.LEVEL_START, { levelId: 'level_01' });
-    console.log('[Level1Scene] ✅ Batch 1 — 灰盒地图 + Player 就绪');
-    console.log('  WASD/方向键移动，Space/W/↑ 跳跃');
+    console.log('[Level1Scene] ✅ Batch 2 — 灰盒地图 + Player + 射击就绪');
+    console.log('  WASD/方向键移动，Space/W/↑ 跳跃，J/Z 射击');
   }
 
   // ─────────────────────────────────────────────────
@@ -78,6 +83,11 @@ export class Level1Scene extends Phaser.Scene {
     this.inputMgr.update();
     const input = this.inputMgr.snapshot;
     this.player.updatePlayer(delta, input);
+    this.weaponSys.update(
+      delta, input,
+      this.player.x, this.player.y,
+      this.player.facingRight,
+    );
     this.updateDebugUI();
   }
 
@@ -117,6 +127,8 @@ export class Level1Scene extends Phaser.Scene {
     makeRect('ground_tile', TILE_SIZE, TILE_SIZE, 0x2d4a3e, 0x4a7a64);
     // 背景天空
     makeRect('sky_bg', MAP_WIDTH, GAME_HEIGHT, 0x0a1a2a);
+    // 子弹：亮黄色 8×4
+    makeRect('bullet_placeholder', 8, 4, 0xffdd44);
     console.log('[纹理] 灰盒贴图生成完毕');
   }
 
@@ -177,12 +189,41 @@ export class Level1Scene extends Phaser.Scene {
   private spawnPlayer(): void {
     this.player = new Player(this, 120, GROUND_Y - 60);
     this.inputMgr = new InputManager(this);
+  }
 
-    // 玩家与地面碰撞
+  // ─────────────────────────────────────────────────
+  // 武器系统（Batch 2）
+  // ─────────────────────────────────────────────────
+  private setupWeaponSystem(): void {
+    this.weaponSys = new WeaponSystem(this);
+  }
+
+  // ─────────────────────────────────────────────────
+  // 物理碰撞
+  // ─────────────────────────────────────────────────
+  private setupCollisions(): void {
+    // 玩家 ↔ 平台
     this.physics.add.collider(
       this.player as unknown as Phaser.Physics.Arcade.Sprite,
       this.platforms,
     );
+
+    // 子弹 ↔ 平台（命中即销毁）
+    this.physics.add.collider(
+      this.weaponSys.getBulletGroup(),
+      this.platforms,
+      (bullet) => {
+        (bullet as unknown as Bullet).onHit();
+      },
+    );
+
+    // 子弹 ↔ 世界边界（越界即销毁）
+    this.physics.world.on('worldbounds', (body: Phaser.Physics.Arcade.Body) => {
+      const go = body.gameObject;
+      if (go instanceof Bullet) {
+        go.destroy();
+      }
+    });
   }
 
   // ─────────────────────────────────────────────────
@@ -223,20 +264,25 @@ export class Level1Scene extends Phaser.Scene {
 
     // 提示操作键
     this.add.text(10, GAME_HEIGHT - 20,
-      'WASD / ← → 移动 | Space / W / ↑ 跳跃 (土狼时间+缓冲) | J / Z 射击(Batch2)',
+      'WASD / ← →  移动 | Space 跳跃 | J / Z 射击（八方向弩箭）',
       { fontFamily: 'monospace', fontSize: '10px', color: '#667788' }
     ).setScrollFactor(0).setDepth(100);
   }
 
   private updateDebugUI(): void {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const cd = this.weaponSys.cooldownPercent;
+    const cdBar = cd > 0
+      ? `[${'='.repeat(Math.round((1 - cd) * 10))}${' '.repeat(Math.round(cd * 10))}]`
+      : '[==========]';
     this.debugText.setText([
-      `[Batch 1] 西洱河初战 — 灰盒`,
+      `[Batch 2] 西洱河初战 — 移动+射击`,
       `State: ${this.player.playerState}`,
       `Pos:   ${Math.round(this.player.x)}, ${Math.round(this.player.y)}`,
       `Vel:   ${Math.round(body.velocity.x)}, ${Math.round(body.velocity.y)}`,
       `OnGnd: ${body.blocked.down}`,
       `HP:    ${this.player.hp} / ${this.player.maxHp}`,
+      `Shot:  ${cdBar}`,
     ]);
   }
 
@@ -245,6 +291,7 @@ export class Level1Scene extends Phaser.Scene {
   // ─────────────────────────────────────────────────
   shutdown(): void {
     this.inputMgr?.destroy();
+    this.weaponSys?.destroy();
     this.bus.clear();
   }
 
