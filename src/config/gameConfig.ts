@@ -4,14 +4,8 @@
 
 import Phaser from 'phaser';
 import { BootScene } from '../scenes/BootScene';
-
-/** 游戏画布尺寸 */
-export const GAME_WIDTH = 960;
-export const GAME_HEIGHT = 540;
-
-/** 物理世界常量 */
-export const GRAVITY = 980;
-export const TILE_SIZE = 32;
+import { Level1Scene } from '../scenes/Level1Scene';
+import { GAME_WIDTH, GAME_HEIGHT, GRAVITY } from './constants';
 
 /** 游戏配置 */
 export const gameConfig: Phaser.Types.Core.GameConfig = {
@@ -26,10 +20,10 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     default: 'arcade',
     arcade: {
       gravity: { x: 0, y: GRAVITY },
-      debug: false,
+      debug: true,           // 调试碰撞盒（验收完成后改回 false）
     },
   },
-  scene: [BootScene],
+  scene: [BootScene, Level1Scene],   // Batch 1 加入 Level1Scene
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

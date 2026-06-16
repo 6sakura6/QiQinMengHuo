@@ -1,6 +1,5 @@
 // ============================================================
-// BootScene.ts — 启动加载场景（Batch 0 占位版本）
-// 后续批次将扩展为完整的资源加载 + 进度条流程
+// BootScene.ts — 启动加载场景（Batch 1 版：加载完成后进入 Level1）
 // ============================================================
 
 import Phaser from 'phaser';
@@ -11,39 +10,42 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Batch 0：无需加载资源，仅显示占位文字
+    // Batch 1：全灰盒，无外部资源需要加载
+    // Batch 3 开始这里会读 asset-manifest.json 并加载精灵/图块
   }
 
   create(): void {
     const { width, height } = this.cameras.main;
 
-    // 标题文字
-    const title = this.add.text(width / 2, height / 2 - 20, '七擒孟获', {
-      fontFamily: 'monospace',
-      fontSize: '32px',
-      color: '#d4a574',
-    });
-    title.setOrigin(0.5);
-
-    // 版本信息
-    const subtitle = this.add.text(
-      width / 2,
-      height / 2 + 20,
-      'Phase 2 · Batch 0 · 工程骨架就绪',
-      {
+    // 进度提示
+    const title = this.add
+      .text(width / 2, height / 2 - 20, '七擒孟获', {
         fontFamily: 'monospace',
-        fontSize: '14px',
+        fontSize: '32px',
+        color: '#d4a574',
+      })
+      .setOrigin(0.5);
+
+    const sub = this.add
+      .text(width / 2, height / 2 + 20, 'Phase 2 · Batch 1 · 正在进入关卡…', {
+        fontFamily: 'monospace',
+        fontSize: '13px',
         color: '#667788',
+      })
+      .setOrigin(0.5);
+
+    // 闪烁动画（像素风 blink）
+    this.tweens.add({
+      targets: sub,
+      alpha: 0,
+      duration: 400,
+      yoyo: true,
+      repeat: 2,
+      onComplete: () => {
+        this.scene.start('Level1Scene');
       },
-    );
-    subtitle.setOrigin(0.5);
+    });
 
-    // 像素格子地装饰线
-    const gfx = this.add.graphics();
-    gfx.lineStyle(1, 0x334455, 0.5);
-    gfx.strokeRect(width / 2 - 160, height / 2 - 40, 320, 80);
-
-    console.log('[BootScene] ✅ Phaser 3 + TypeScript + Vite 运行正常');
-    console.log('[BootScene] 📦 等待 Batch 1 → InputManager + Player');
+    console.log('[BootScene] → 即将进入 Level1Scene');
   }
 }
