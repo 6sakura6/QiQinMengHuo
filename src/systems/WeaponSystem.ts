@@ -73,7 +73,10 @@ export class WeaponSystem {
     }
 
     for (const b of toCleanup) {
-      this.bullets.remove(b, false, false);
+      // ⚠️ BUGFIX: 必须完整销毁（remove from group + scene + physics world）
+      //    之前用 remove(b, false, false) 仅从 Group 移除但不销毁，
+      //    导致 body 仍留在 physics.world.bodies → 调试渲染器持续画碰撞盒（方框+绿线）
+      this.bullets.remove(b, true, true);
     }
   }
 

@@ -108,10 +108,11 @@ export class CameraSystem {
   // 震动效果（受到伤害 / Boss 砸地等）
   // ─────────────────────────────────────────────────
   shake(intensity = 5, duration = 200): void {
-    // Phaser shake intensity 单位为像素（约 0.01×intensity）
-    // 载荷 intensity 为归一化值（0-100），除以 10 得到像素级
-    // 典型：5 → 0.5px（微震），20 → 2px（中震），50 → 5px（强震）
-    this.cam.shake(duration, intensity / 10, true);
+    // Phaser Camera.shake() 的 intensity 是相机尺寸的比例值(0~1)
+    // 载荷 intensity 为归一化值（0-100），除以 1000 映射到 0-0.1 范围
+    // 典型：5→0.005≈4px（微震），15→0.015≈12px（中震），40→0.04≈32px（强震）
+    // ⚠️ BUGFIX: 之前 /10 导致 15→1.5 = 相机尺寸150% = 1200px疯狂抖动
+    this.cam.shake(duration, intensity / 1000, true);
   }
 
   // ─────────────────────────────────────────────────

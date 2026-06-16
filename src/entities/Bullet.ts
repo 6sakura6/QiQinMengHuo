@@ -5,11 +5,15 @@
 
 import Phaser from 'phaser';
 
-const DEFAULT_LIFETIME_MS = 800;
-const BULLET_DAMAGE       = 1;
+const DEFAULT_LIFETIME_MS = 2000;   // 600px/s × 2s = 1200px 射程，确保能打到 Boss
+export const BULLET_DAMAGE = 1;
 
 export class Bullet extends Phaser.Physics.Arcade.Sprite {
-  private _damage = BULLET_DAMAGE;
+  // ⚠️ BUGFIX: esbuild 编译后 class extends Phaser.Sprite 的 instance
+  //    在 physics.add.overlap 回调中 instanceof 检测会失败（原型链断裂）。
+  //    因此不用 class field，改用 Phaser 内置 setData() 存储伤害值。
+  //    setData 是 GameObject 上的普通 JS 字典，不依赖原型链。
+
   private _elapsed = 0;
   private readonly _lifetimeMs: number;
 
@@ -36,9 +40,11 @@ export class Bullet extends Phaser.Physics.Arcade.Sprite {
     this._lifetimeMs = lifetimeMs;
   }
 
-  /** 发射：设置速度（必须在 add 到 Group 之后调用，否则速度被清零） */
+  /** 发射：设置速度 + 存储伤害值到 Phaser Data 层 */
   launch(vx: number, vy: number): void {
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(vx, vy);
+    // 将伤害值存到 Phaser 内置 Data 字典（不依赖 JS prototype chain）
+    this.setData('damage', BULLET_DAMAGE);
   }
 
   // ── 由 WeaponSystem.update() 每帧调用 ──────────────
@@ -56,6 +62,4 @@ export class Bullet extends Phaser.Physics.Arcade.Sprite {
     this.destroy();
   }
 
-  // ── Getters ──────────────────────────────────────
-  get damage(): number { return this._damage; }
 }

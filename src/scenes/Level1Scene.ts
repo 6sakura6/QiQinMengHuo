@@ -4,25 +4,30 @@
 // Batch 2 追加：WeaponSystem + 射击
 // Batch 3 追加：Enemy 实体（巡逻/追击/受击/死亡）
 // Batch 4 追加：CameraSystem + HUD（正式血条/冷却条/敌人计数/分数）
+// Batch 5 追加：BossMengHuoL1 + Boss 血条 + Boss 触发/碰撞
 // Batch 6 追加：DialogSystem
 // Batch 7 追加：CaptureSystem
 // ============================================================
 
 import Phaser from 'phaser';
 import { Player } from '../entities/Player';
-import { Bullet } from '../entities/Bullet';
 import { Enemy } from '../entities/Enemy';
+import { BossMengHuoL1 } from '../entities/BossMengHuoL1';
 import { InputManager } from '../systems/InputManager';
 import { WeaponSystem } from '../systems/WeaponSystem';
 import { CameraSystem } from '../systems/CameraSystem';
 import { EventBus } from '../core/EventBus';
 import { GameEvent } from '../types/events.types';
 import { HUD } from '../ui/HUD';
+import { BossHealthBar } from '../ui/BossHealthBar';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../config/constants';
 
 // ─── 灰盒地图布局常量 ─────────────────────────────────────────
-const MAP_WIDTH  = GAME_WIDTH * 3;   // 关卡宽度 = 屏幕 3 倍
-const GROUND_Y   = GAME_HEIGHT - 40; // 地面 Y
+const MAP_WIDTH        = 5000;              // 关卡宽度（Boss 区需要更大地图）
+const GROUND_Y         = GAME_HEIGHT - 40;  // 地面 Y
+const BOSS_TRIGGER_X   = 3200;              // 玩家到达触发 Boss
+const BOSS_SPAWN_X     = 4000;              // Boss 出生点
+const BOSS_SPAWN_Y     = GROUND_Y - 120;    // Boss 出生 Y（大象体型大，需要更高）
 const PLATFORM_CONFIGS = [
   // { x, y, w }  全部像素值
   { x: 200,  y: GAME_HEIGHT - 130, w: 160 },  // 低平台
@@ -34,6 +39,11 @@ const PLATFORM_CONFIGS = [
   { x: 1800, y: GAME_HEIGHT - 160, w: 160 },
   { x: 2100, y: GAME_HEIGHT - 200, w: 120 },
   { x: 2400, y: GAME_HEIGHT - 240, w: 200 },
+  // Boss 竞技场区域（3200-5000）
+  { x: 3400, y: GAME_HEIGHT - 200, w: 160 },
+  { x: 3700, y: GAME_HEIGHT - 240, w: 100 },
+  { x: 4100, y: GAME_HEIGHT - 180, w: 180 },
+  { x: 4500, y: GAME_HEIGHT - 220, w: 140 },
 ];
 
 export class Level1Scene extends Phaser.Scene {
@@ -43,6 +53,7 @@ export class Level1Scene extends Phaser.Scene {
   private weaponSys!: WeaponSystem;
   private cameraSys!: CameraSystem;
   private hud!: HUD;
+  private bossHealthBar!: BossHealthBar;
   private bus = EventBus.getInstance();
 
   // ── 物理组 ────────────────────────────────────────
@@ -51,6 +62,8 @@ export class Level1Scene extends Phaser.Scene {
   private _totalEnemies = 0;
   private _liveEnemies   = 0;
   private _score         = 0;
+  private boss!: BossMengHuoL1;
+  private _bossSpawned   = false;
 
   constructor() {
     super({ key: 'Level1Scene' });
@@ -77,12 +90,14 @@ export class Level1Scene extends Phaser.Scene {
     this.setupWeaponSystem();
     this.spawnEnemies();
     this.setupCamera();
+    this.spawnBoss();
     this.setupCollisions();
     this.setupEventListeners();
     this.setupHUD();
+    this.setupBossHealthBar();
 
     this.bus.emit(GameEvent.LEVEL_START, { levelId: 'level_01' });
-    console.log('[Level1Scene] ✅ Batch 4 — 地图 + Player + 射击 + 敌人 + Camera + HUD 就绪');
+    console.log('[Level1Scene] ✅ Batch 5 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss 就绪');
     console.log('  WASD/方向键移动，Space/W/↑ 跳跃，J/Z 射击（八方向弩箭）');
     console.log(`  敌人数：${this._totalEnemies}`);
   }
@@ -100,6 +115,7 @@ export class Level1Scene extends Phaser.Scene {
       this.player.facingRight,
     );
     this.updateEnemies(delta);
+    this.updateBoss(delta);
     this.cameraSys.update(delta);
     this.hud.update({
       hp: this.player.hp,
@@ -151,6 +167,8 @@ export class Level1Scene extends Phaser.Scene {
     makeRect('bullet_placeholder', 8, 4, 0xffdd44);
     // 敌人：暗红色 24×40，橙色边框
     makeRect('enemy_placeholder', 24, 40, 0xaa2222, 0xff6644);
+    // Boss 占位：深紫 64×80，金框（象 + 骑手）
+    makeRect('boss_meng_huo_placeholder', 64, 80, 0x6A1B9A, 0xFFD700);
     console.log('[纹理] 灰盒贴图生成完毕');
   }
 
@@ -293,20 +311,23 @@ export class Level1Scene extends Phaser.Scene {
     );
 
     // 子弹 ↔ 敌人（命中击杀）
-    // processCallback 防御：确保双方 active 且敌人未死亡
+    // ⚠️ 同 Boss：用 getData('damage') 识别子弹，不依赖参数顺序
     this.physics.add.overlap(
       this.weaponSys.getBulletGroup(),
       this.enemyGroup,
-      (bullet, enemy) => {
-        const b = bullet as unknown as Bullet;
-        const e = enemy as unknown as Enemy;
-        e.takeDamage(b.damage);
-        b.onHit();
+      (objA, objB) => {
+        const aIsBullet = (objA as any).getData?.('damage') !== undefined;
+        const bulletObj = (aIsBullet ? objA : objB) as unknown as Phaser.Physics.Arcade.Sprite;
+        const enemyObj = (aIsBullet ? objB : objA) as unknown as Enemy;
+        const dmg: number = bulletObj.getData('damage') ?? 1;
+        enemyObj.takeDamage(dmg);
+        bulletObj.destroy();
       },
-      (bullet, enemy) => {
-        const b = bullet as unknown as Bullet;
-        const e = enemy as unknown as Enemy;
-        return b.active && e.active && !e.isDefeated;
+      (objA, objB) => {
+        const aIsBullet = (objA as any).getData?.('damage') !== undefined;
+        const bulletObj = (aIsBullet ? objA : objB) as unknown as Phaser.Physics.Arcade.Sprite;
+        const enemyObj = (aIsBullet ? objB : objA) as unknown as Enemy;
+        return bulletObj.active && enemyObj.active && !enemyObj.isDefeated;
       },
       this,
     );
@@ -316,17 +337,78 @@ export class Level1Scene extends Phaser.Scene {
       this.weaponSys.getBulletGroup(),
       this.platforms,
       (bullet) => {
-        (bullet as unknown as Bullet).onHit();
+        const go = bullet as unknown as Phaser.GameObjects.GameObject;
+        if (go.getData?.('damage') !== undefined) {
+          go.destroy();
+        }
       },
     );
 
     // 子弹 ↔ 世界边界（越界即销毁）
+    // esbuild 编译后 instanceof Bullet 失效，用 getData('damage') 识别子弹
     this.physics.world.on('worldbounds', (body: Phaser.Physics.Arcade.Body) => {
       const go = body.gameObject;
-      if (go instanceof Bullet) {
+      if (go.getData('damage') !== undefined) {
         go.destroy();
       }
     });
+
+    // ── Boss 碰撞（Batch 5）───────────────────────
+    this.setupBossCollisions();
+  }
+
+  // ─────────────────────────────────────────────────
+  // Boss 碰撞独立方法（便于管理）
+  // ─────────────────────────────────────────────────
+  private setupBossCollisions(): void {
+    // Boss ↔ 平台（站在地面上）
+    this.physics.add.collider(
+      this.boss as unknown as Phaser.Physics.Arcade.Sprite,
+      this.platforms,
+    );
+
+    // 玩家 ↔ Boss（接触伤害）
+    this.physics.add.overlap(
+      this.player as unknown as Phaser.Physics.Arcade.Sprite,
+      this.boss as unknown as Phaser.Physics.Arcade.Sprite,
+      () => {
+        if (!this.boss.isActive || this.boss.isDefeated) return;
+        const dmg = this.boss.dealContactDamage();
+        this.player.takeDamage(dmg, 'boss');
+      },
+      (_p, _b) => this.boss.isActive && !this.boss.isDefeated,
+      this,
+    );
+
+    // 子弹 ↔ Boss（命中伤害）
+    // ⚠️ BUGFIX: Phaser overlap 回调参数顺序不保证！
+    //    add.overlap(group, sprite) 的回调可能收到 (sprite, groupChild)。
+    //    不能假设第一个参数是子弹。必须用 getData('damage') 识别子弹。
+    //    之前的 Bug：b.setActive(false) 实际作用在 Boss 上 → Boss 永久失活。
+    this.physics.add.overlap(
+      this.weaponSys.getBulletGroup(),
+      this.boss as unknown as Phaser.Physics.Arcade.Sprite,
+      (objA, objB) => {
+        // 用 getData('damage') 识别子弹（只有子弹有此属性）
+        const aIsBullet = (objA as any).getData?.('damage') !== undefined;
+        const bulletObj = (aIsBullet ? objA : objB) as unknown as Phaser.Physics.Arcade.Sprite;
+
+        if (!this.boss.isVulnerable) return;
+        if (!bulletObj.active) return;
+        const dmg: number = bulletObj.getData('damage') ?? 1;
+        this.boss.takeDamage(dmg);
+        // 安全失活子弹（绝不影响 Boss）
+        bulletObj.setActive(false);
+        bulletObj.setVisible(false);
+        (bulletObj.body as Phaser.Physics.Arcade.Body).enable = false;
+      },
+      (objA, objB) => {
+        const aIsBullet = (objA as any).getData?.('damage') !== undefined;
+        const bulletObj = (aIsBullet ? objA : objB) as unknown as Phaser.Physics.Arcade.Sprite;
+        return this.boss.isVulnerable && bulletObj.active;
+      },
+      this,
+    );
   }
 
   // ─────────────────────────────────────────────────
@@ -367,6 +449,25 @@ export class Level1Scene extends Phaser.Scene {
         console.log('[Level1Scene] 🎉 所有敌人已消灭！');
       }
     });
+
+    // Boss 被击败（Batch 5）
+    this.bus.on(GameEvent.BOSS_DEFEATED, (payload) => {
+      const p = payload as { bossId: string };
+      console.log(`[Level1Scene] 👑 Boss 击败: ${p.bossId} — 准备进入擒获流程`);
+      // 擒获流程由 Batch 7 CaptureSystem 接管
+      // 此处仅记录 Boss 击败事件
+    });
+
+    // Boss AOE 伤害转发（Batch 5）
+    // Boss 的踏地/横扫通过 PLAYER_DAMAGED(currentHp=-1) 发送伤害请求
+    // Scene 负责实际调用 player.takeDamage()
+    this.bus.on(GameEvent.PLAYER_DAMAGED, (payload) => {
+      const p = payload as { currentHp: number; maxHp: number; source: string };
+      if (p.currentHp === -1 && p.source.startsWith('boss_')) {
+        const dmg = p.source === 'boss_stomp' ? 1 : 1;
+        this.player.takeDamage(dmg, p.source);
+      }
+    });
   }
 
   // ─────────────────────────────────────────────────
@@ -377,6 +478,36 @@ export class Level1Scene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────
+  // Boss（Batch 5）
+  // ─────────────────────────────────────────────────
+  private spawnBoss(): void {
+    this.boss = new BossMengHuoL1(this, BOSS_SPAWN_X, BOSS_SPAWN_Y, {
+      id: 'menghuo_elephant',
+      name: '孟获·骑象',
+      maxHp: 30,
+      phases: [],
+      speed: 60,
+    });
+  }
+
+  private setupBossHealthBar(): void {
+    this.bossHealthBar = new BossHealthBar(this);
+  }
+
+  private updateBoss(delta: number): void {
+    // 触发检测：玩家到达触发点且 Boss 未激活
+    if (!this._bossSpawned && this.player.x >= BOSS_TRIGGER_X) {
+      this._bossSpawned = true;
+      this.boss.activate();
+      console.log('[Level1Scene] 👑 Boss 激活！孟获·骑象登场');
+    }
+
+    if (this.boss.active && this.boss.isActive) {
+      this.boss.updateBoss(delta, this.player.x, this.player.y);
+    }
+  }
+
+  // ─────────────────────────────────────────────────
   // 场景销毁时清理
   // ─────────────────────────────────────────────────
   shutdown(): void {
@@ -384,7 +515,9 @@ export class Level1Scene extends Phaser.Scene {
     this.weaponSys?.destroy();
     this.cameraSys?.destroy();
     this.hud?.destroy();
+    this.bossHealthBar?.destroy();
     this.enemyGroup?.destroy(true);
+    this.boss?.destroy();
     this.bus.clear();
   }
 
