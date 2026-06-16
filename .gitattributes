@@ -1,0 +1,17 @@
+# 源码文件：Git 仓库内统一存 LF，checkout 时自动转换
+* text=auto
+
+# 二进制 / 不应转换的文件
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.svg binary
+*.mp3 binary
+*.wav binary
+*.ogg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
