@@ -3,7 +3,7 @@
 // 当前进度：灰盒地图 + Player 移动跳跃
 // Batch 2 追加：WeaponSystem + 射击
 // Batch 3 追加：Enemy 实体（巡逻/追击/受击/死亡）
-// Batch 4 追加：Camera / HUD
+// Batch 4 追加：CameraSystem + HUD（正式血条/冷却条/敌人计数/分数）
 // Batch 6 追加：DialogSystem
 // Batch 7 追加：CaptureSystem
 // ============================================================
@@ -14,8 +14,10 @@ import { Bullet } from '../entities/Bullet';
 import { Enemy } from '../entities/Enemy';
 import { InputManager } from '../systems/InputManager';
 import { WeaponSystem } from '../systems/WeaponSystem';
+import { CameraSystem } from '../systems/CameraSystem';
 import { EventBus } from '../core/EventBus';
 import { GameEvent } from '../types/events.types';
+import { HUD } from '../ui/HUD';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../config/constants';
 
 // ─── 灰盒地图布局常量 ─────────────────────────────────────────
@@ -39,6 +41,8 @@ export class Level1Scene extends Phaser.Scene {
   private player!: Player;
   private inputMgr!: InputManager;
   private weaponSys!: WeaponSystem;
+  private cameraSys!: CameraSystem;
+  private hud!: HUD;
   private bus = EventBus.getInstance();
 
   // ── 物理组 ────────────────────────────────────────
@@ -46,9 +50,7 @@ export class Level1Scene extends Phaser.Scene {
   private enemyGroup!: Phaser.Physics.Arcade.Group;
   private _totalEnemies = 0;
   private _liveEnemies   = 0;
-
-  // ── 调试 UI ───────────────────────────────────────
-  private debugText!: Phaser.GameObjects.Text;
+  private _score         = 0;
 
   constructor() {
     super({ key: 'Level1Scene' });
@@ -66,6 +68,9 @@ export class Level1Scene extends Phaser.Scene {
   // create — 组装场景
   // ─────────────────────────────────────────────────
   create(): void {
+    // ⚠️ 必须绑定 shutdown 事件，否则 scene.restart() 不会清理旧资源
+    this.events.on('shutdown', this.shutdown, this);
+
     this.buildGrayboxTextures();
     this.buildMap();
     this.spawnPlayer();
@@ -74,10 +79,10 @@ export class Level1Scene extends Phaser.Scene {
     this.setupCamera();
     this.setupCollisions();
     this.setupEventListeners();
-    this.buildDebugUI();
+    this.setupHUD();
 
     this.bus.emit(GameEvent.LEVEL_START, { levelId: 'level_01' });
-    console.log('[Level1Scene] ✅ Batch 3 — 地图 + Player + 射击 + 敌人就绪');
+    console.log('[Level1Scene] ✅ Batch 4 — 地图 + Player + 射击 + 敌人 + Camera + HUD 就绪');
     console.log('  WASD/方向键移动，Space/W/↑ 跳跃，J/Z 射击（八方向弩箭）');
     console.log(`  敌人数：${this._totalEnemies}`);
   }
@@ -95,7 +100,15 @@ export class Level1Scene extends Phaser.Scene {
       this.player.facingRight,
     );
     this.updateEnemies(delta);
-    this.updateDebugUI();
+    this.cameraSys.update(delta);
+    this.hud.update({
+      hp: this.player.hp,
+      maxHp: this.player.maxHp,
+      cooldownPercent: this.weaponSys.cooldownPercent,
+      liveEnemies: this._liveEnemies,
+      totalEnemies: this._totalEnemies,
+      score: this._score,
+    });
   }
 
   // ─────────────────────────────────────────────────
@@ -317,12 +330,19 @@ export class Level1Scene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────
-  // 摄像机（Batch 1 基础版，Batch 4 由 CameraSystem 接管）
+  // 摄像机系统（Batch 4）
   // ─────────────────────────────────────────────────
   private setupCamera(): void {
-    this.cameras.main.setBounds(0, -GAME_HEIGHT, MAP_WIDTH, GAME_HEIGHT * 3);
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    this.cameras.main.setDeadzone(80, 40);
+    this.cameraSys = new CameraSystem(this, {
+      worldBounds: new Phaser.Geom.Rectangle(
+        0, -GAME_HEIGHT, MAP_WIDTH, GAME_HEIGHT * 3,
+      ),
+      lerpX: 0.08,
+      lerpY: 0.08,
+      deadzoneW: 80,
+      deadzoneH: 40,
+    });
+    this.cameraSys.follow(this.player as unknown as Phaser.GameObjects.GameObject);
   }
 
   // ─────────────────────────────────────────────────
@@ -335,9 +355,11 @@ export class Level1Scene extends Phaser.Scene {
       this.scene.restart();
     });
 
-    // 敌人击杀——追踪全清
-    this.bus.on(GameEvent.ENEMY_DEFEATED, () => {
+    // 敌人击杀——追踪全清 + 计分
+    this.bus.on(GameEvent.ENEMY_DEFEATED, (payload) => {
+      const p = payload as any;
       this._liveEnemies = Math.max(0, this._liveEnemies - 1);
+      this._score += p.scoreValue ?? 100;
       if (this._liveEnemies <= 0) {
         this.bus.emit(GameEvent.ALL_ENEMIES_CLEARED, {
           count: this._totalEnemies,
@@ -348,43 +370,10 @@ export class Level1Scene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────
-  // 开发调试 UI
+  // HUD（Batch 4）
   // ─────────────────────────────────────────────────
-  private buildDebugUI(): void {
-    this.debugText = this.add
-      .text(10, 10, '', {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#00ff88',
-        backgroundColor: '#00000066',
-        padding: { x: 6, y: 4 },
-      })
-      .setScrollFactor(0)  // 固定在屏幕左上，不随镜头移动
-      .setDepth(100);
-
-    // 提示操作键
-    this.add.text(10, GAME_HEIGHT - 20,
-      'WASD / ← →  移动 | Space 跳跃 | J / Z 射击（八方向弩箭）',
-      { fontFamily: 'monospace', fontSize: '10px', color: '#667788' }
-    ).setScrollFactor(0).setDepth(100);
-  }
-
-  private updateDebugUI(): void {
-    const body = this.player.body as Phaser.Physics.Arcade.Body;
-    const cd = this.weaponSys.cooldownPercent;
-    const cdBar = cd > 0
-      ? `[${'='.repeat(Math.round((1 - cd) * 10))}${' '.repeat(Math.round(cd * 10))}]`
-      : '[==========]';
-    this.debugText.setText([
-      `[Batch 3] 西洱河初战 — 移动+射击+敌人`,
-      `State: ${this.player.playerState}`,
-      `Pos:   ${Math.round(this.player.x)}, ${Math.round(this.player.y)}`,
-      `Vel:   ${Math.round(body.velocity.x)}, ${Math.round(body.velocity.y)}`,
-      `OnGnd: ${body.blocked.down}`,
-      `HP:    ${this.player.hp} / ${this.player.maxHp}`,
-      `Shot:  ${cdBar}`,
-      `Enemy: ${this._liveEnemies} / ${this._totalEnemies}`,
-    ]);
+  private setupHUD(): void {
+    this.hud = new HUD(this);
   }
 
   // ─────────────────────────────────────────────────
@@ -393,6 +382,8 @@ export class Level1Scene extends Phaser.Scene {
   shutdown(): void {
     this.inputMgr?.destroy();
     this.weaponSys?.destroy();
+    this.cameraSys?.destroy();
+    this.hud?.destroy();
     this.enemyGroup?.destroy(true);
     this.bus.clear();
   }
