@@ -51,6 +51,7 @@ const DEFAULT_CONFIG: BossConfig = {
   maxHp: 30,
   phases: [BossPhase.PHASE_1, BossPhase.PHASE_2, BossPhase.PHASE_3],
   speed: 60,
+  scoreValue: 500,
 };
 
 // 阶段阈值 (hpPercent, newAttacks[], speedMul)
@@ -68,7 +69,6 @@ const PHASE_DEFS: PhaseDef[] = [
 // ─── 时间常量 ──────────────────────────────────────
 const HURT_FLASH_MS   = 300;   // 受伤闪烁时长
 const PHASE_TRANS_MS  = 1000;  // 转阶段无敌时长
-const INVINCIBLE_MS   = 500;   // 受伤后无敌帧
 
 export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
   // ── 配置 & 状态 ──────────────────────────────────
@@ -433,7 +433,10 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
       },
     });
 
-    this.bus.emit(GameEvent.BOSS_DEFEATED, { bossId: this._cfg.id });
+    this.bus.emit(GameEvent.BOSS_DEFEATED, {
+      bossId: this._cfg.id,
+      scoreValue: this._cfg.scoreValue,
+    });
 
     // 锁定镜头 + 震动
     this.bus.emit(GameEvent.CAMERA_LOCK, {
@@ -497,8 +500,8 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     // 简单加权：minDist 高的在距离远时权重更大
     const weighted: { def: AttackDef; weight: number }[] = attacks.map((def) => {
       let w = 1;
+      // 距离越远，minDist 高的攻击权重越大（如 charge 远距离更有利）
       if (def.minDist && distX > def.minDist) w += 2;
-      if (def.maxDist && distX <= def.maxDist!) w += 1;
       return { def, weight: w };
     });
 

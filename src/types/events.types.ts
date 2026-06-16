@@ -74,7 +74,7 @@ export interface EventPayloadMap {
 
   [GameEvent.BOSS_SPAWNED]: { bossId: string };
   [GameEvent.BOSS_PHASE_CHANGE]: { phase: number; hpPercent: number };
-  [GameEvent.BOSS_DEFEATED]: { bossId: string };
+  [GameEvent.BOSS_DEFEATED]: { bossId: string; scoreValue: number };
   [GameEvent.BOSS_DAMAGED]: { currentHp: number; maxHp: number };
 
   [GameEvent.DIALOG_TRIGGER]: { dialogId: string };

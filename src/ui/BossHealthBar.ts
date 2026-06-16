@@ -31,6 +31,7 @@ export class BossHealthBar {
   private _currentHp = 0;
   private _maxHp     = 0;
   private _bossName  = '???';
+  private _pulseTime = 0;       // 低血量闪烁计时器（毫秒）
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -142,8 +143,8 @@ export class BossHealthBar {
     } else {
       color = 0xff2222;          // 鲜红（危险）
     }
-    // 30% 以下加闪烁效果
-    const alpha = pct <= 0.3 ? 0.7 + 0.3 * Math.sin(Date.now() / 150) : 1;
+    // 30% 以下加闪烁效果（由 pulse() 每帧驱动 _pulseTime）
+    const alpha = pct <= 0.3 ? 0.7 + 0.3 * Math.sin(this._pulseTime / 150) : 1;
     this.fillBar.fillStyle(color, alpha);
     this.fillBar.fillRect(BAR_X, BAR_Y, fillW, BAR_HEIGHT);
 
@@ -152,10 +153,25 @@ export class BossHealthBar {
   }
 
   // ─────────────────────────────────────────────────
+  // 逐帧更新低血量闪烁（由 Scene.update 调用）
+  // 仅在血条可见且 HP ≤ 30% 时执行重绘
+  // ─────────────────────────────────────────────────
+  pulse(delta: number): void {
+    if (!this._visible) return;
+    const pct = this._maxHp > 0 ? this._currentHp / this._maxHp : 0;
+    if (pct > 0.3) return;
+    this._pulseTime += delta;
+    // 仅更新 fillBar 的 alpha，不重绘文字/背景（避免闪烁时的视觉跳动）
+    const alpha = 0.7 + 0.3 * Math.sin(this._pulseTime / 150);
+    this.fillBar.setAlpha(alpha);
+  }
+
+  // ─────────────────────────────────────────────────
   // 显隐控制
   // ─────────────────────────────────────────────────
   private show(): void {
     this._visible = true;
+    this.fillBar.setAlpha(1);  // 重置闪烁残留
     this.nameText.setVisible(true);
     this.bgBar.setVisible(true);
     this.fillBar.setVisible(true);

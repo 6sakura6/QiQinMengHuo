@@ -94,6 +94,7 @@ export interface BossConfig {
   maxHp: number;
   phases: BossPhase[];
   speed: number;
+  scoreValue: number;   // 击败后获得的积分
 }
 
 // ============ 子弹 ============

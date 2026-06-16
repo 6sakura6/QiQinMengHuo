@@ -116,6 +116,7 @@ export class Level1Scene extends Phaser.Scene {
     );
     this.updateEnemies(delta);
     this.updateBoss(delta);
+    this.bossHealthBar.pulse(delta);
     this.cameraSys.update(delta);
     this.hud.update({
       hp: this.player.hp,
@@ -452,8 +453,9 @@ export class Level1Scene extends Phaser.Scene {
 
     // Boss 被击败（Batch 5）
     this.bus.on(GameEvent.BOSS_DEFEATED, (payload) => {
-      const p = payload as { bossId: string };
-      console.log(`[Level1Scene] 👑 Boss 击败: ${p.bossId} — 准备进入擒获流程`);
+      const p = payload as { bossId: string; scoreValue: number };
+      console.log(`[Level1Scene] 👑 Boss 击败: ${p.bossId} — 准备进入擒获流程，获得 ${p.scoreValue} 分`);
+      this._score += p.scoreValue;
       // 擒获流程由 Batch 7 CaptureSystem 接管
       // 此处仅记录 Boss 击败事件
     });
@@ -487,6 +489,7 @@ export class Level1Scene extends Phaser.Scene {
       maxHp: 30,
       phases: [],
       speed: 60,
+      scoreValue: 500,   // 击败 Boss 获得 500 分
     });
   }
 
