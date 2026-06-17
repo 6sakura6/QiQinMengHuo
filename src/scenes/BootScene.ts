@@ -1,8 +1,9 @@
 // ============================================================
-// BootScene.ts — 启动加载场景（Batch 1 版：加载完成后进入 Level1）
+// BootScene.ts — 启动加载场景（Batch 8：初始化 SaveSystem + 进入 Level1）
 // ============================================================
 
 import Phaser from 'phaser';
+import { SaveSystem } from '../systems/SaveSystem';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -17,6 +18,11 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.cameras.main;
 
+    // ── 初始化全局单例系统 ────────────────────────
+    // SaveSystem 在首次 getInstance() 时自动从 localStorage 恢复存档
+    const saveSys = SaveSystem.getInstance();
+    console.log(`[BootScene] SaveSystem 就绪 — 已解锁: ${saveSys.data.unlockedLevels.join(', ')}`);
+
     // 进度提示
     const title = this.add
       .text(width / 2, height / 2 - 20, '七擒孟获', {
@@ -27,7 +33,7 @@ export class BootScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const sub = this.add
-      .text(width / 2, height / 2 + 20, 'Phase 2 · Batch 1 · 正在进入关卡…', {
+      .text(width / 2, height / 2 + 20, 'Phase 2 · Batch 8 · 正在进入关卡…', {
         fontFamily: 'monospace',
         fontSize: '13px',
         color: '#667788',

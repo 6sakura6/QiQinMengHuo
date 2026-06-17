@@ -180,23 +180,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this._hp = 0;
     this.setPlayerState(PlayerState.DEATH);
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setVelocity(0, -300);
+    body.setVelocity(0, -200);
 
     this.bus.emit(GameEvent.PLAYER_DEATH, {
       cause: 'damage',
       position: { x: this.x, y: this.y },
     });
 
-    // 0.8s 后淡出（后续接 Level restart 流程）
-    this.scene.time.delayedCall(800, () => {
-      this.scene.tweens.add({
-        targets: this,
-        alpha: 0,
-        duration: 500,
-        onComplete: () => {
-          this.bus.emit(GameEvent.LEVEL_RESTART, { levelId: 'level_01' });
-        },
-      });
+    // 🔧 热修复: 不再使用 tween（避免 onComplete 回调中调用 scene.restart()
+    //    时与 TweenManager 迭代器冲突导致冻屏）。
+    //    改为即时半透明 + 纯延时后重启。
+    this.setAlpha(0.35);
+    this.scene.time.delayedCall(1200, () => {
+      // 守卫：防止 Player 已被销毁（极边缘情况）
+      if (!this.scene) return;
+      this.bus.emit(GameEvent.LEVEL_RESTART, { levelId: 'level_01' });
     });
   }
 

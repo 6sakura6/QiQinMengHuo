@@ -24,6 +24,7 @@ const SPEAKER_COLORS: Record<string, number> = {
   '张伯':   0xa5d6a7,
 };
 
+// Batch 8 热修复：防止 interrupted-dialog 冻屏 + 键盘 Key 泄露
 export class DialogBox {
   private scene: Phaser.Scene;
   private bus = EventBus.getInstance();
@@ -49,6 +50,7 @@ export class DialogBox {
   private _skipKey1!: Phaser.Input.Keyboard.Key;  // Space
   private _skipKey2!: Phaser.Input.Keyboard.Key;  // Enter
   private _skipKey3!: Phaser.Input.Keyboard.Key;  // J
+  private _skipKeys: Phaser.Input.Keyboard.Key[] = [];  // 🔑 所有绑定 Key 的集合，防泄露
 
   // ── 尺寸 ──────────────────────────────────────
   private boxW!: number;
@@ -84,9 +86,11 @@ export class DialogBox {
     this.scene.tweens.killTweensOf(this.container);
     this.container.setAlpha(0);
 
-    // 销毁旧元素
+    // 销毁旧元素（先清理键盘绑定，防 Key 对象泄露）
+    this.destroySkipKeys();
     this.cleanupElements();
 
+    // 🛡️ 先设置 _dialog 再设置 _active，确保 update() 中 _dialog 永不为 null
     this._dialog   = dialog;
     this._active   = true;
     this._charIndex = 0;
@@ -170,11 +174,12 @@ export class DialogBox {
     ).setOrigin(1, 1);
     this.container.add(this.promptText);
 
-    // 键盘绑定
+    // 键盘绑定 — 🔑 注册到 _skipKeys 集合以便 show() 替换时清理
     const kb = this.scene.input.keyboard!;
     this._skipKey1 = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this._skipKey2 = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     this._skipKey3 = kb.addKey(Phaser.Input.Keyboard.KeyCodes.J);
+    this._skipKeys = [this._skipKey1, this._skipKey2, this._skipKey3];
 
     // 入场动画
     this.scene.tweens.add({
@@ -194,6 +199,8 @@ export class DialogBox {
     if (!this._active) return;
 
     this._active = false;
+    // ⚠️ _dialog 在 cleanupElements() 中不再自动置 null
+    //    在此显式置 null，但语义上 hide 已经停用对话框
     this._dialog = null;
 
     // 退场动画
@@ -203,6 +210,7 @@ export class DialogBox {
       duration: 150,
       ease: 'Power2',
       onComplete: () => {
+        this.destroySkipKeys();
         this.cleanupElements();
       },
     });
@@ -282,16 +290,29 @@ export class DialogBox {
   destroy(): void {
     this._active = false;
     this.bus.off(GameEvent.DIALOG_START, this._onDialogStart, this);
+    this.destroySkipKeys();
     this.cleanupElements();
+    this._dialog = null;
     this.container.destroy();
   }
 
   // ─────────────────────────────────────────────────
   // 内部
   // ─────────────────────────────────────────────────
+  /** 销毁已注册的跳过后按键，防止 Key 对象泄露 */
+  private destroySkipKeys(): void {
+    for (const k of this._skipKeys) {
+      k.destroy();
+    }
+    this._skipKeys = [];
+  }
+
   private cleanupElements(): void {
     this.container.removeAll(true);
-    this._dialog = null;
+    // ⚠️ 不再在此处设置 this._dialog = null
+    //    旧代码在 cleanupElements 中置 null 会在 show() 的间隙留出空窗期
+    //    如果 update() 在该窗口执行，this._dialog 为 null → 静默跳过整帧 → 冻屏
+    //    现在由 destroy() / hide() 各自管理 _dialog 的生命周期
   }
 
   private isSkipPressed(): boolean {

@@ -6,7 +6,8 @@
 // Batch 4 追加：CameraSystem + HUD（正式血条/冷却条/敌人计数/分数）
 // Batch 5 追加：BossMengHuoL1 + Boss 血条 + Boss 触发/碰撞
 // Batch 6 追加：DialogSystem
-// Batch 7 追加：CaptureSystem
+// Batch 8 追加：SaveSystem 串联 + 死亡/时间追踪
+// Batch 8 热修复：防 interrupted-dialog 冻屏（取消 BOSS_INTRO 计时器 + physics 状态守卫）
 // ============================================================
 
 import Phaser from 'phaser';
@@ -25,6 +26,7 @@ import { DialogTrigger } from '../types/system.types';
 import { HUD } from '../ui/HUD';
 import { BossHealthBar } from '../ui/BossHealthBar';
 import { DialogBox } from '../ui/DialogBox';
+import { SaveSystem } from '../systems/SaveSystem';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../config/constants';
 import dialogsData from '../data/dialogs.json';
 
@@ -74,6 +76,10 @@ export class Level1Scene extends Phaser.Scene {
   private _dialogActive  = false;
   private boss!: BossMengHuoL1;
   private _bossSpawned   = false;
+  private _startTime     = 0;
+  private _deathCount    = 0;
+  private _captureStarted = false;         // 🛡️ 擒获已启动标记
+  private _bossIntroTimer?: Phaser.Time.TimerEvent;  // Boss 登场对话计时器引用
 
   constructor() {
     super({ key: 'Level1Scene' });
@@ -98,6 +104,12 @@ export class Level1Scene extends Phaser.Scene {
     this._dialogActive = false;
     this._totalEnemies = 0;
     this._liveEnemies   = 0;
+    // ⚠️ _deathCount 不在此重置 — 需要跨 scene.restart() 累积
+    //    每次死亡触发 LEVEL_RESTART → _deathCount++ → restart → create()
+    //    若在此归零则通关结算永远显示 deaths=0
+    this._startTime    = this.time.now;
+    this._captureStarted = false;
+    this._bossIntroTimer = undefined;
 
     // ⚠️ 必须绑定 shutdown 事件，否则 scene.restart() 不会清理旧资源
     this.events.on('shutdown', this.shutdown, this);
@@ -117,7 +129,7 @@ export class Level1Scene extends Phaser.Scene {
     this.setupBossHealthBar();
 
     this.bus.emit(GameEvent.LEVEL_START, { levelId: 'level_01' });
-    console.log('[Level1Scene] ✅ Batch 7 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss + 对话 + 擒获 就绪');
+    console.log('[Level1Scene] ✅ Batch 8 热修复 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss + 对话 + 擒获 + SaveSystem + 冻屏修复 就绪');
     console.log('  WASD/方向键移动，Space/W/↑ 跳跃，J/Z 射击（八方向弩箭）');
     console.log(`  敌人数：${this._totalEnemies}`);
   }
@@ -467,10 +479,16 @@ export class Level1Scene extends Phaser.Scene {
   // EventBus 监听
   // ─────────────────────────────────────────────────
   private setupEventListeners(): void {
-    // 关卡重启（玩家死亡触发）
+    // 关卡重启（玩家死亡触发）— Batch 8: 追踪死亡次数
+    // 🔧 热修复: 使用 delayedCall(0) 延迟一帧执行 scene.restart()，
+    //    避免从 Player.die() 的延时回调中直接调用 restart 导致的 Phaser 内部竞态。
     this.bus.on(GameEvent.LEVEL_RESTART, (_payload) => {
+      this._deathCount++;
       this.bus.clear();
-      this.scene.restart();
+      // 延迟到下一帧：确保不在任何 Phaser 内部迭代（TweenManager/TimerEvent）中销毁场景
+      this.time.delayedCall(1, () => {
+        this.scene.restart();
+      });
     });
 
     // 敌人击杀——追踪全清 + 计分
@@ -491,6 +509,15 @@ export class Level1Scene extends Phaser.Scene {
       const p = payload as { bossId: string; scoreValue: number };
       console.log(`[Level1Scene] 👑 Boss 击败: ${p.bossId} — 准备进入擒获流程，获得 ${p.scoreValue} 分`);
       this._score += p.scoreValue;
+
+      // 🛡️ 标记擒获已启动 + 取消未触发的 Boss 登场台词
+      this._captureStarted = true;
+      if (this._bossIntroTimer) {
+        this._bossIntroTimer.remove(false);
+        this._bossIntroTimer = undefined;
+        console.log('[Level1Scene] ⏭ 已取消 Boss 登场台词计时器');
+      }
+
       this.captureSys.startCapture(this.boss);
     });
 
@@ -506,10 +533,15 @@ export class Level1Scene extends Phaser.Scene {
     });
 
     // ── 对话状态管理（Batch 6）─────────────────────
+    // 🛡️ Batch 8 热修复: 使用计数器替代布尔 toggle，防多次 pause 导致 resume 失效
     this.bus.on(GameEvent.DIALOG_START, (_payload) => {
+      const wasActive = this._dialogActive;
       this._dialogActive = true;
       this.player.lockForCutscene();
-      this.physics.pause();  // ⚠️ 冻结所有物理体（敌人/玩家/子弹），防对话中敌人移动
+      // 仅在首次进入对话时暂停物理（防多次 pause 后单次 resume 无法恢复）
+      if (!wasActive) {
+        this.physics.pause();
+      }
     });
 
     this.bus.on(GameEvent.DIALOG_END, (_payload) => {
@@ -525,6 +557,13 @@ export class Level1Scene extends Phaser.Scene {
       this.player.unlockFromCutscene();
       this.physics.resume();   // 恢复物理模拟
       this.inputMgr.reset();   // ⚠️ 清除残留按键，防止对话中按着的 Space 触发跳跃
+
+      // 🛡️ 安全检查：确保物理世界确实被恢复了
+      //    如果由于某些异常路径导致 physics 仍然暂停，强制恢复
+      if ((this.physics.world as any).isPaused) {
+        console.warn('[Level1Scene] ⚠️ DIALOG_END 后 physics 仍为暂停状态，强制恢复');
+        this.physics.resume();
+      }
     });
 
     // Boss 阶段变化 → 触发中盘对话（Batch 6）
@@ -547,13 +586,44 @@ export class Level1Scene extends Phaser.Scene {
       this.dialogSys.triggerByEvent(DialogTrigger.RELEASE);
     });
 
-    // 擒获完成 → 场景跳转（延迟以等待 Boss 淡出动画完成）
+    // 擒获完成 → 记录统计 + 跳转结算（Batch 8: SaveSystem 串联）
+    // 🛡️ 安全网: 即使 delayedCall 被异常清除也保证跳转
     this.bus.on(GameEvent.CAPTURE_COMPLETE, (_payload) => {
-      console.log('[Level1Scene] 🏆 擒获完成，0.8s 后跳转结算');
+      const timeSec = Math.floor((this.time.now - this._startTime) / 1000);
+      const saveSys = SaveSystem.getInstance();
+
+      saveSys.recordLevelCompletion({
+        levelId: 'level_01',
+        completed: true,
+        timeSec,
+        score: this._score,
+        deaths: this._deathCount,
+        fragmentsCollected: [],
+        playStyle: '',
+      });
+
+      saveSys.unlockLevel('level_02');
+
+      console.log(`[Level1Scene] 🏆 擒获完成 — 时间:${timeSec}s 得分:${this._score} 死亡:${this._deathCount}`);
+      console.log('[Level1Scene] → 0.8s 后跳转结算');
+
+      // 🛡️ 确保 physics 已恢复（防御：对话链异常可能导致 physics 仍暂停）
+      if ((this.physics.world as any).isPaused) {
+        console.warn('[Level1Scene] ⚠️ CAPTURE_COMPLETE 时 physics 仍为暂停，强制恢复');
+        this.physics.resume();
+      }
+      // 🛡️ 确保 _dialogActive 已清除
+      this._dialogActive = false;
+      this.player.unlockFromCutscene();
+
       this.time.delayedCall(800, () => {
         this.scene.start('ResultScene', {
           levelId: 'level_01',
+          levelName: '西洱河初战',
           score: this._score,
+          timeSec,
+          deaths: this._deathCount,
+          nextLevelId: 'level_02',
         });
       });
     });
@@ -616,8 +686,13 @@ export class Level1Scene extends Phaser.Scene {
       this._bossSpawned = true;
       this.boss.activate();
       console.log('[Level1Scene] 👑 Boss 激活！孟获·骑象登场');
-      // 延迟触发 Boss 登场台词
-      this.time.delayedCall(800, () => {
+      // 延迟触发 Boss 登场台词 — 保存计时器引用以便擒获开始时取消
+      this._bossIntroTimer = this.time.delayedCall(800, () => {
+        // 🛡️ 守卫：擒获流程已启动则跳过登场台词
+        if (this._captureStarted) {
+          console.log('[Level1Scene] ⏭ Boss 登场台词已取消（擒获流程优先）');
+          return;
+        }
         this.dialogSys.triggerByEvent(DialogTrigger.BOSS_INTRO);
       });
     }
@@ -631,17 +706,25 @@ export class Level1Scene extends Phaser.Scene {
   // 场景销毁时清理
   // ─────────────────────────────────────────────────
   shutdown(): void {
-    this.inputMgr?.destroy();
-    this.weaponSys?.destroy();
-    this.cameraSys?.destroy();
-    this.hud?.destroy();
-    this.bossHealthBar?.destroy();
-    this.dialogBox?.destroy();
-    this.dialogSys?.reset();
-    this.captureSys?.reset();
-    this.enemyGroup?.destroy(true);
-    this.boss?.destroy();
-    this.bus.clear();
+    // 🔧 热修复: 全量 try-catch 防御，避免任一子系统 destroy 抛异常导致场景无法重启
+    try { this.inputMgr?.destroy(); } catch (e) { console.error('[Level1Scene] inputMgr.destroy 异常:', e); }
+    try { this.weaponSys?.destroy(); } catch (e) { console.error('[Level1Scene] weaponSys.destroy 异常:', e); }
+    try { this.cameraSys?.destroy(); } catch (e) { console.error('[Level1Scene] cameraSys.destroy 异常:', e); }
+    try { this.hud?.destroy(); } catch (e) { console.error('[Level1Scene] hud.destroy 异常:', e); }
+    try { this.bossHealthBar?.destroy(); } catch (e) { console.error('[Level1Scene] bossHealthBar.destroy 异常:', e); }
+    try { this.dialogBox?.destroy(); } catch (e) { console.error('[Level1Scene] dialogBox.destroy 异常:', e); }
+    try { this.dialogSys?.reset(); } catch (e) { console.error('[Level1Scene] dialogSys.reset 异常:', e); }
+    try { this.captureSys?.reset(); } catch (e) { console.error('[Level1Scene] captureSys.reset 异常:', e); }
+    try { this.enemyGroup?.destroy(true); } catch (e) { console.error('[Level1Scene] enemyGroup.destroy 异常:', e); }
+    try { this.boss?.destroy(); } catch (e) { console.error('[Level1Scene] boss.destroy 异常:', e); }
+    // 清理未触发的计时器
+    try {
+      if (this._bossIntroTimer) {
+        this._bossIntroTimer.remove(false);
+        this._bossIntroTimer = undefined;
+      }
+    } catch (e) { console.error('[Level1Scene] bossIntroTimer.remove 异常:', e); }
+    try { this.bus.clear(); } catch (e) { console.error('[Level1Scene] bus.clear 异常:', e); }
   }
 
   // ─────────────────────────────────────────────────
