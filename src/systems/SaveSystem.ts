@@ -157,6 +157,15 @@ export class SaveSystem {
     return records[records.length - 1] ?? null;
   }
 
+  /** 检查是否有任何进度（用于主菜单"继续游戏"按钮） */
+  hasAnyProgress(): boolean {
+    // level_01 始终存在，需排除后才代表真实进度
+    const hasUnlockedBeyondFirst = this._data.unlockedLevels.length > 1;
+    const hasFragments = this._data.collectedFragments.length > 0;
+    const hasRecords = Object.keys(this._data.levelRecords).length > 0;
+    return hasUnlockedBeyondFirst || hasFragments || hasRecords;
+  }
+
   /** 清除所有数据（慎用） */
   resetAll(): void {
     this._data = blankSave();

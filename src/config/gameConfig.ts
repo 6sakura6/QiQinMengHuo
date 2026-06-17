@@ -4,6 +4,7 @@
 
 import Phaser from 'phaser';
 import { BootScene } from '../scenes/BootScene';
+import { MainMenuScene } from '../scenes/MainMenuScene';
 import { Level1Scene } from '../scenes/Level1Scene';
 import { ResultScene } from '../scenes/ResultScene';
 import { GAME_WIDTH, GAME_HEIGHT, GRAVITY } from './constants';
@@ -24,7 +25,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
       debug: true,           // 调试碰撞盒（验收完成后改回 false）
     },
   },
-  scene: [BootScene, Level1Scene, ResultScene],   // Batch 8 加入 ResultScene
+  scene: [BootScene, MainMenuScene, Level1Scene, ResultScene],   // Batch 10 加入 MainMenuScene
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

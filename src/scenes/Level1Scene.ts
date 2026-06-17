@@ -85,12 +85,13 @@ export class Level1Scene extends Phaser.Scene {
   private _startTime     = 0;
   private _deathCount    = 0;
   private _captureStarted = false;         // 🛡️ 擒获已启动标记
-  private _bossIntroTimer?: Phaser.Time.TimerEvent;  // Boss 登场对话计时器引用
+  private _bossIntroDelayMs = 0;          // 🛡️ Boss 登场对话延迟（自己管理 delta，避免 TimerManager 帧序竞争）
   private _fragmentsCollected: string[] = [];  // Batch 9: 本局收集的碎片 ID
   private _captureCompleteFired = false;   // 🔍 诊断: CAPTURE_COMPLETE 是否已触发
   private _resultSceneStarted = false;     // 🔍 诊断: ResultScene 是否已启动
   private _captureCompleteTime = 0;        // 🔍 诊断: CAPTURE_COMPLETE 触发时间
   private _noDialogSince = 0;              // 🔍 诊断: 上次对话活跃的时间戳
+  private _dialogStuckTimer = 0;           // 🛡️ 安全网3: 对话卡住计时（同一次对话连续帧数）
 
   constructor() {
     super({ key: 'Level1Scene' });
@@ -120,12 +121,13 @@ export class Level1Scene extends Phaser.Scene {
     //    若在此归零则通关结算永远显示 deaths=0
     this._startTime    = this.time.now;
     this._captureStarted = false;
-    this._bossIntroTimer = undefined;
+    this._bossIntroDelayMs = 0;
     this._fragmentsCollected = [];
     this._captureCompleteFired = false;
     this._resultSceneStarted = false;
     this._captureCompleteTime = 0;
     this._noDialogSince = 0;
+    this._dialogStuckTimer = 0;
 
     // ⚠️ 必须绑定 shutdown 事件，否则 scene.restart() 不会清理旧资源
     this.events.on('shutdown', this.shutdown, this);
@@ -200,6 +202,37 @@ export class Level1Scene extends Phaser.Scene {
           return;
         }
       }
+    }
+
+    // 🛡️ 安全网3: _dialogActive 卡住超过 12s 强制恢复（无论是否擒获流程）
+    //   — 防御 TimerManager 帧序竞争导致 physics.pause + _dialogActive=true 死锁
+    if (this._dialogActive) {
+      this._dialogStuckTimer += delta;
+      if (this._dialogStuckTimer > 12000) {
+        console.error('[Level1Scene] 🚨 安全网3: _dialogActive 卡住超过 12s，强制恢复！');
+        console.error(`  state: captureStarted=${this._captureStarted} captureCompleteFired=${this._captureCompleteFired}`);
+        this._dialogActive = false;
+        this.physics.resume();
+        this.player.unlockFromCutscene();
+        this.dialogBox.hide();
+        this.dialogSys.reset();
+        this._dialogStuckTimer = 0;
+        // 如果是擒获流程中，强制跳转结算
+        if (this._captureStarted && !this._captureCompleteFired) {
+          this._captureCompleteFired = true;
+          this.scene.start('ResultScene', {
+            levelId: 'level_01',
+            levelName: '西洱河初战',
+            score: this._score,
+            timeSec: Math.floor((this.time.now - this._startTime) / 1000),
+            deaths: this._deathCount,
+            nextLevelId: 'level_02',
+          });
+          return;
+        }
+      }
+    } else {
+      this._dialogStuckTimer = 0;
     }
 
     // 对话期间：只更新 DialogBox + HUD，暂停物理 + 输入 + 所有游戏逻辑
@@ -570,19 +603,15 @@ export class Level1Scene extends Phaser.Scene {
       }
     });
 
-    // Boss 被击败（Batch 7: 交给 CaptureSystem 接管）
+  // Boss 被击败（Batch 7: 交给 CaptureSystem 接管）
     this.bus.on(GameEvent.BOSS_DEFEATED, (payload) => {
       const p = payload as { bossId: string; scoreValue: number };
       console.log(`[Level1Scene] 👑 Boss 击败: ${p.bossId} — 准备进入擒获流程，获得 ${p.scoreValue} 分`);
       this._score += p.scoreValue;
 
-      // 🛡️ 标记擒获已启动 + 取消未触发的 Boss 登场台词
+      // 🛡️ 标记擒获已启动 + 取消 Boss 登场对话
       this._captureStarted = true;
-      if (this._bossIntroTimer) {
-        this._bossIntroTimer.remove(false);
-        this._bossIntroTimer = undefined;
-        console.log('[Level1Scene] ⏭ 已取消 Boss 登场台词计时器');
-      }
+      this._bossIntroDelayMs = 0;  // 清除 delta 计数（若 BOSS_INTRO 已触发则无害）
 
       this.captureSys.startCapture(this.boss);
     });
@@ -883,17 +912,19 @@ export class Level1Scene extends Phaser.Scene {
     if (!this._bossSpawned && this.player.x >= BOSS_TRIGGER_X) {
       this._bossSpawned = true;
       this.boss.activate();
-      this.screenShake.bossEntrance();  // Batch 9: Boss 登场震动
+      this.screenShake.bossEntrance();
       console.log('[Level1Scene] 👑 Boss 激活！孟获·骑象登场');
-      // 延迟触发 Boss 登场台词 — 保存计时器引用以便擒获开始时取消
-      this._bossIntroTimer = this.time.delayedCall(800, () => {
-        // 🛡️ 守卫：擒获流程已启动则跳过登场台词
-        if (this._captureStarted) {
-          console.log('[Level1Scene] ⏭ Boss 登场台词已取消（擒获流程优先）');
-          return;
-        }
+      // 🛡️ 自管理延迟（不用 Phaser TimerManager，避免其先于 update() 触发 → 帧序竞争）
+      this._bossIntroDelayMs = 800;
+    }
+
+    // 🌋 Boss 登场台词延迟检查（在 Boss 逻辑处理后，确保 boss.isDefeated 最新）
+    if (this._bossIntroDelayMs > 0) {
+      this._bossIntroDelayMs -= delta;
+      if (this._bossIntroDelayMs <= 0 && !this._captureStarted && !this.boss.isDefeated) {
+        console.log('[Level1Scene] 💬 Boss 登场台词触发');
         this.dialogSys.triggerByEvent(DialogTrigger.BOSS_INTRO);
-      });
+      }
     }
 
     if (this.boss.active && this.boss.isActive) {
@@ -924,13 +955,8 @@ export class Level1Scene extends Phaser.Scene {
         this.fragmentSprite.destroy();
       }
     } catch (e) { console.error('[Level1Scene] fragment 异常:', e); }
-    // 清理未触发的计时器
-    try {
-      if (this._bossIntroTimer) {
-        this._bossIntroTimer.remove(false);
-        this._bossIntroTimer = undefined;
-      }
-    } catch (e) { console.error('[Level1Scene] bossIntroTimer.remove 异常:', e); }
+    // 清理 Boss 登场延迟标记
+    this._bossIntroDelayMs = 0;
     try { this.bus.clear(); } catch (e) { console.error('[Level1Scene] bus.clear 异常:', e); }
   }
 

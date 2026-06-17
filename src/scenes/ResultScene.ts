@@ -1,5 +1,5 @@
 // ============================================================
-// ResultScene.ts — 关卡结算场景（Batch 8）
+// ResultScene.ts — 关卡结算场景（Batch 8 → Batch 10 串联）
 // 显示通关统计 + 存档记录 + 下一关/主菜单导航
 // ============================================================
 
@@ -133,9 +133,9 @@ export class ResultScene extends Phaser.Scene {
       this._menuItems.push(nextBtn);
     }
 
-    // "返回主菜单"
+    // "返回主菜单"（Batch 10: 直接跳转 MainMenuScene，跳过 BootScene 重复加载）
     const menuBtn = this.createMenuItem(W / 2, menuY + (this._data.nextLevelId ? 44 : 0), '🏠  返回主菜单', () => {
-      this.scene.start('BootScene');
+      this.scene.start('MainMenuScene');
     });
     this._menuItems.push(menuBtn);
 
