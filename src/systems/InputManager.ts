@@ -94,6 +94,17 @@ export class InputManager {
     this._prevShoot = shoot;
   }
 
+  /** 清除按键记忆状态（对话/过场结束后调用，防止残留按键触发误操作） */
+  reset(): void {
+    // 将 prev 状态同步为当前物理按键状态
+    // 这样对话结束后，对话期间一直按着的键不会在新帧产生 false JustPressed
+    const isDown = (keys: Phaser.Input.Keyboard.Key[]) =>
+      keys.some((k) => k.isDown);
+    this._prevJump  = isDown(this.keys.jump);
+    this._prevShoot = isDown(this.keys.shoot);
+    this._snapshot  = this.emptySnapshot();
+  }
+
   /** 获取当前帧输入快照（只读） */
   get snapshot(): Readonly<InputSnapshot> {
     return this._snapshot;

@@ -16,11 +16,16 @@ import { BossMengHuoL1 } from '../entities/BossMengHuoL1';
 import { InputManager } from '../systems/InputManager';
 import { WeaponSystem } from '../systems/WeaponSystem';
 import { CameraSystem } from '../systems/CameraSystem';
+import { DialogSystem } from '../systems/DialogSystem';
+import type { DialogDataEntry } from '../systems/DialogSystem';
 import { EventBus } from '../core/EventBus';
 import { GameEvent } from '../types/events.types';
+import { DialogTrigger } from '../types/system.types';
 import { HUD } from '../ui/HUD';
 import { BossHealthBar } from '../ui/BossHealthBar';
+import { DialogBox } from '../ui/DialogBox';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../config/constants';
+import dialogsData from '../data/dialogs.json';
 
 // ─── 灰盒地图布局常量 ─────────────────────────────────────────
 const MAP_WIDTH        = 5000;              // 关卡宽度（Boss 区需要更大地图）
@@ -52,8 +57,10 @@ export class Level1Scene extends Phaser.Scene {
   private inputMgr!: InputManager;
   private weaponSys!: WeaponSystem;
   private cameraSys!: CameraSystem;
+  private dialogSys!: DialogSystem;
   private hud!: HUD;
   private bossHealthBar!: BossHealthBar;
+  private dialogBox!: DialogBox;
   private bus = EventBus.getInstance();
 
   // ── 物理组 ────────────────────────────────────────
@@ -62,6 +69,7 @@ export class Level1Scene extends Phaser.Scene {
   private _totalEnemies = 0;
   private _liveEnemies   = 0;
   private _score         = 0;
+  private _dialogActive  = false;
   private boss!: BossMengHuoL1;
   private _bossSpawned   = false;
 
@@ -95,9 +103,10 @@ export class Level1Scene extends Phaser.Scene {
     this.setupEventListeners();
     this.setupHUD();
     this.setupBossHealthBar();
+    this.setupDialog();
 
     this.bus.emit(GameEvent.LEVEL_START, { levelId: 'level_01' });
-    console.log('[Level1Scene] ✅ Batch 5 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss 就绪');
+    console.log('[Level1Scene] ✅ Batch 6 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss + 对话 就绪');
     console.log('  WASD/方向键移动，Space/W/↑ 跳跃，J/Z 射击（八方向弩箭）');
     console.log(`  敌人数：${this._totalEnemies}`);
   }
@@ -106,8 +115,23 @@ export class Level1Scene extends Phaser.Scene {
   // update — 每帧驱动 InputManager + Player
   // ─────────────────────────────────────────────────
   update(_time: number, delta: number): void {
+    // 对话期间：只更新 DialogBox + HUD，暂停物理 + 输入 + 所有游戏逻辑
+    if (this._dialogActive) {
+      this.dialogBox.update(delta);
+      this.hud.update({
+        hp: this.player.hp,
+        maxHp: this.player.maxHp,
+        cooldownPercent: this.weaponSys.cooldownPercent,
+        liveEnemies: this._liveEnemies,
+        totalEnemies: this._totalEnemies,
+        score: this._score,
+      });
+      return;
+    }
+
     this.inputMgr.update();
     const input = this.inputMgr.snapshot;
+
     this.player.updatePlayer(delta, input);
     this.weaponSys.update(
       delta, input,
@@ -470,6 +494,29 @@ export class Level1Scene extends Phaser.Scene {
         this.player.takeDamage(dmg, p.source);
       }
     });
+
+    // ── 对话状态管理（Batch 6）─────────────────────
+    this.bus.on(GameEvent.DIALOG_START, (_payload) => {
+      this._dialogActive = true;
+      this.player.lockForCutscene();
+      this.physics.pause();  // ⚠️ 冻结所有物理体（敌人/玩家/子弹），防对话中敌人移动
+    });
+
+    this.bus.on(GameEvent.DIALOG_END, (_payload) => {
+      this._dialogActive = false;
+      this.player.unlockFromCutscene();
+      this.physics.resume();   // 恢复物理模拟
+      this.inputMgr.reset();   // ⚠️ 清除残留按键，防止对话中按着的 Space 触发跳跃
+    });
+
+    // Boss 阶段变化 → 触发中盘对话（Batch 6）
+    this.bus.on(GameEvent.BOSS_PHASE_CHANGE, (payload) => {
+      const p = payload as { phase: number; hpPercent: number };
+      if (p.phase === 2 && !this._dialogActive) {
+        // ⚠️ 守卫：若 BOSS_INTRO 对话仍在播放则跳过，避免时序竞争
+        this.dialogSys.triggerByEvent(DialogTrigger.BOSS_PHASE);
+      }
+    });
   }
 
   // ─────────────────────────────────────────────────
@@ -497,12 +544,34 @@ export class Level1Scene extends Phaser.Scene {
     this.bossHealthBar = new BossHealthBar(this);
   }
 
+  // ─────────────────────────────────────────────────
+  // 对话系统（Batch 6）
+  // ─────────────────────────────────────────────────
+  private setupDialog(): void {
+    // 加载对话数据
+    const dialogs: DialogDataEntry[] = (dialogsData as { level_01: DialogDataEntry[] }).level_01;
+    this.dialogSys = new DialogSystem();
+    this.dialogSys.load(dialogs);
+
+    // 创建对话框 UI
+    this.dialogBox = new DialogBox(this);
+
+    // 延迟播放开场对话（等场景渲染一帧后再触发）
+    this.time.delayedCall(300, () => {
+      this.dialogSys.triggerByEvent(DialogTrigger.LEVEL_INTRO);
+    });
+  }
+
   private updateBoss(delta: number): void {
     // 触发检测：玩家到达触发点且 Boss 未激活
     if (!this._bossSpawned && this.player.x >= BOSS_TRIGGER_X) {
       this._bossSpawned = true;
       this.boss.activate();
       console.log('[Level1Scene] 👑 Boss 激活！孟获·骑象登场');
+      // 延迟触发 Boss 登场台词
+      this.time.delayedCall(800, () => {
+        this.dialogSys.triggerByEvent(DialogTrigger.BOSS_INTRO);
+      });
     }
 
     if (this.boss.active && this.boss.isActive) {
@@ -519,6 +588,8 @@ export class Level1Scene extends Phaser.Scene {
     this.cameraSys?.destroy();
     this.hud?.destroy();
     this.bossHealthBar?.destroy();
+    this.dialogBox?.destroy();
+    this.dialogSys?.reset();
     this.enemyGroup?.destroy(true);
     this.boss?.destroy();
     this.bus.clear();

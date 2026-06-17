@@ -14,7 +14,7 @@ export enum DialogSpeaker {
 
 export enum DialogTrigger {
   LEVEL_INTRO = 'level_intro',
-  MID_BOSS = 'mid_boss',
+  COMBAT_BARK = 'combat_bark',
   BOSS_INTRO = 'boss_intro',
   BOSS_PHASE = 'boss_phase',
   BOSS_DEFEAT = 'boss_defeat',
@@ -28,8 +28,10 @@ export enum DialogTrigger {
 export interface DialogNode {
   id: string;
   trigger: DialogTrigger;
-  speaker: DialogSpeaker;
+  speaker: string;           // 说话人名称（如 "诸葛亮"、"孟获"）
   text: string;
+  skippable: boolean;
+  firstPlayLockSec: number;  // 首次播放时强制显示秒数
   emotion?: string;
   next?: string;             // 下一句对话 ID
   choice?: DialogChoice[];

@@ -1,0 +1,70 @@
+{
+  "level_01": [
+    {
+      "id": "l1_opening_zhuge_advice",
+      "trigger": "level_intro",
+      "speaker": "诸葛亮",
+      "text": "南中不平，北伐无以为继。此战所求，非杀戮，乃归心。",
+      "skippable": true,
+      "firstPlayLockSec": 0,
+      "next": "l1_opening_zhuge_advice_02"
+    },
+    {
+      "id": "l1_opening_zhuge_advice_02",
+      "trigger": "level_intro",
+      "speaker": "诸葛亮",
+      "text": "你随我出征以来，屡立战功。此去西洱河，孟获必轻敌冒进。记住——我要活的。",
+      "skippable": true,
+      "firstPlayLockSec": 0
+    },
+    {
+      "id": "l1_old_soldier_tip",
+      "trigger": "combat_bark",
+      "speaker": "张伯",
+      "text": "小子，别只顾往前冲，南中人的箭可不慢。",
+      "skippable": true,
+      "firstPlayLockSec": 0
+    },
+    {
+      "id": "l1_boss_intro",
+      "trigger": "boss_intro",
+      "speaker": "孟获",
+      "text": "汉人小儿，也敢犯我南中！",
+      "skippable": true,
+      "firstPlayLockSec": 0
+    },
+    {
+      "id": "l1_boss_mid",
+      "trigger": "boss_phase",
+      "speaker": "孟获",
+      "text": "哼……有几分本事。但还不够！",
+      "skippable": true,
+      "firstPlayLockSec": 0
+    },
+    {
+      "id": "l1_capture_menghuo_01",
+      "trigger": "boss_defeat",
+      "speaker": "孟获",
+      "text": "诡计！汉人狡诈，我不服！若堂堂正正一战，胜负未可知！",
+      "skippable": false,
+      "firstPlayLockSec": 2.0
+    },
+    {
+      "id": "l1_release_zhuge_01",
+      "trigger": "release",
+      "speaker": "诸葛亮",
+      "text": "将军勇则勇矣，然未识天时。请回营整军，改日再战。",
+      "skippable": false,
+      "firstPlayLockSec": 2.0,
+      "next": "l1_release_zhuge_02"
+    },
+    {
+      "id": "l1_release_zhuge_02",
+      "trigger": "release",
+      "speaker": "诸葛亮",
+      "text": "一擒不足以服其心。你做得很好——去歇息吧。",
+      "skippable": false,
+      "firstPlayLockSec": 1.5
+    }
+  ]
+}
