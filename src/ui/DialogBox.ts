@@ -260,6 +260,7 @@ export class DialogBox {
     // （firstPlayLockSec=0 时 lock 从第一帧即为 false，文本打完即刻推进）
     if (this._done && !locked && !this._dialog.skippable) {
       const dialogId = this._dialog.id;
+      console.log(`[DialogBox] 🔍 自动推进 → hide() + DIALOG_END (${dialogId})`);
       this.hide();
       this.bus.emit(GameEvent.DIALOG_END, { dialogId });
       return;

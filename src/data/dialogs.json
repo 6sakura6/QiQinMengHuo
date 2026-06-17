@@ -65,6 +65,14 @@
       "text": "一擒不足以服其心。你做得很好——去歇息吧。",
       "skippable": false,
       "firstPlayLockSec": 1.5
+    },
+    {
+      "id": "l1_fragment_found",
+      "trigger": "fragment_found",
+      "speaker": "张伯",
+      "text": "这是……南中古碑！上面刻着诸葛亮南征的往事。看来丞相早有筹谋。",
+      "skippable": true,
+      "firstPlayLockSec": 0
     }
   ]
 }

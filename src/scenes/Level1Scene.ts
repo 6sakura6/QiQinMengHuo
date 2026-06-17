@@ -8,6 +8,7 @@
 // Batch 6 追加：DialogSystem
 // Batch 8 追加：SaveSystem 串联 + 死亡/时间追踪
 // Batch 8 热修复：防 interrupted-dialog 冻屏（取消 BOSS_INTRO 计时器 + physics 状态守卫）
+// Batch 9 追加：StorySystem（碎片收集）+ ScreenShake（四级震动）
 // ============================================================
 
 import Phaser from 'phaser';
@@ -27,8 +28,11 @@ import { HUD } from '../ui/HUD';
 import { BossHealthBar } from '../ui/BossHealthBar';
 import { DialogBox } from '../ui/DialogBox';
 import { SaveSystem } from '../systems/SaveSystem';
+import { StorySystem } from '../systems/StorySystem';
+import { ScreenShake } from '../systems/ScreenShake';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../config/constants';
 import dialogsData from '../data/dialogs.json';
+import fragmentsData from '../data/fragments.json';
 
 // ─── 灰盒地图布局常量 ─────────────────────────────────────────
 const MAP_WIDTH        = 5000;              // 关卡宽度（Boss 区需要更大地图）
@@ -65,6 +69,8 @@ export class Level1Scene extends Phaser.Scene {
   private hud!: HUD;
   private bossHealthBar!: BossHealthBar;
   private dialogBox!: DialogBox;
+  private storySys!: StorySystem;
+  private screenShake!: ScreenShake;
   private bus = EventBus.getInstance();
 
   // ── 物理组 ────────────────────────────────────────
@@ -80,6 +86,11 @@ export class Level1Scene extends Phaser.Scene {
   private _deathCount    = 0;
   private _captureStarted = false;         // 🛡️ 擒获已启动标记
   private _bossIntroTimer?: Phaser.Time.TimerEvent;  // Boss 登场对话计时器引用
+  private _fragmentsCollected: string[] = [];  // Batch 9: 本局收集的碎片 ID
+  private _captureCompleteFired = false;   // 🔍 诊断: CAPTURE_COMPLETE 是否已触发
+  private _resultSceneStarted = false;     // 🔍 诊断: ResultScene 是否已启动
+  private _captureCompleteTime = 0;        // 🔍 诊断: CAPTURE_COMPLETE 触发时间
+  private _noDialogSince = 0;              // 🔍 诊断: 上次对话活跃的时间戳
 
   constructor() {
     super({ key: 'Level1Scene' });
@@ -110,6 +121,11 @@ export class Level1Scene extends Phaser.Scene {
     this._startTime    = this.time.now;
     this._captureStarted = false;
     this._bossIntroTimer = undefined;
+    this._fragmentsCollected = [];
+    this._captureCompleteFired = false;
+    this._resultSceneStarted = false;
+    this._captureCompleteTime = 0;
+    this._noDialogSince = 0;
 
     // ⚠️ 必须绑定 shutdown 事件，否则 scene.restart() 不会清理旧资源
     this.events.on('shutdown', this.shutdown, this);
@@ -127,9 +143,12 @@ export class Level1Scene extends Phaser.Scene {
     this.setupEventListeners();
     this.setupHUD();
     this.setupBossHealthBar();
+    this.setupStorySystem();     // Batch 9: 故事碎片
+    this.setupScreenShake();     // Batch 9: 屏幕震动
+    this.spawnFragment();        // Batch 9: 隐藏碎片放置
 
     this.bus.emit(GameEvent.LEVEL_START, { levelId: 'level_01' });
-    console.log('[Level1Scene] ✅ Batch 8 热修复 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss + 对话 + 擒获 + SaveSystem + 冻屏修复 就绪');
+    console.log('[Level1Scene] ✅ Batch 9 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss + 对话 + 擒获 + SaveSystem + 碎片 + 震动 就绪');
     console.log('  WASD/方向键移动，Space/W/↑ 跳跃，J/Z 射击（八方向弩箭）');
     console.log(`  敌人数：${this._totalEnemies}`);
   }
@@ -137,7 +156,52 @@ export class Level1Scene extends Phaser.Scene {
   // ─────────────────────────────────────────────────
   // update — 每帧驱动 InputManager + Player
   // ─────────────────────────────────────────────────
+
   update(_time: number, delta: number): void {
+    // 🔍 诊断安全网 1: CAPTURE_COMPLETE 已触发但 ResultScene 未启动 → 强制跳转
+    if (this._captureCompleteFired && !this._resultSceneStarted) {
+      if (this._captureCompleteTime === 0) {
+        this._captureCompleteTime = _time;
+      } else if (_time - this._captureCompleteTime > 2000) {
+        console.error('[Level1Scene] 🚨 安全网1: CAPTURE_COMPLETE 后 2s ResultScene 仍未启动，强制跳转！');
+        this._resultSceneStarted = true;
+        this.scene.start('ResultScene', {
+          levelId: 'level_01',
+          levelName: '西洱河初战',
+          score: this._score,
+          timeSec: Math.floor((this.time.now - this._startTime) / 1000),
+          deaths: this._deathCount,
+          nextLevelId: 'level_02',
+        });
+        return;
+      }
+    }
+
+    // 🔍 诊断安全网 2: 擒获流程已启动但 CAPTURE_COMPLETE 未触发，且无对话活跃超过 5s → 强制推进
+    if (this._captureStarted && !this._captureCompleteFired) {
+      if (this._dialogActive) {
+        this._noDialogSince = _time;
+      } else {
+        if (this._noDialogSince === 0) {
+          this._noDialogSince = _time;
+        } else if (_time - this._noDialogSince > 5000) {
+          console.error('[Level1Scene] 🚨 安全网2: 擒获流程中无对话活跃超过 5s，强制触发 CAPTURE_COMPLETE！');
+          this._captureCompleteFired = true;
+          this._captureCompleteTime = _time;
+          // 直接跳转，不经过 CaptureSystem
+          this.scene.start('ResultScene', {
+            levelId: 'level_01',
+            levelName: '西洱河初战',
+            score: this._score,
+            timeSec: Math.floor((this.time.now - this._startTime) / 1000),
+            deaths: this._deathCount,
+            nextLevelId: 'level_02',
+          });
+          return;
+        }
+      }
+    }
+
     // 对话期间：只更新 DialogBox + HUD，暂停物理 + 输入 + 所有游戏逻辑
     if (this._dialogActive) {
       this.dialogBox.update(delta);
@@ -217,6 +281,8 @@ export class Level1Scene extends Phaser.Scene {
     makeRect('enemy_placeholder', 24, 40, 0xaa2222, 0xff6644);
     // Boss 占位：深紫 64×80，金框（象 + 骑手）
     makeRect('boss_meng_huo_placeholder', 64, 80, 0x6A1B9A, 0xFFD700);
+    // 故事碎片标记：金色发光小方块 16×16（Batch 9）
+    makeRect('fragment_marker', 16, 16, 0xFFD700, 0xFFF8C0);
     console.log('[纹理] 灰盒贴图生成完毕');
   }
 
@@ -530,6 +596,15 @@ export class Level1Scene extends Phaser.Scene {
         const dmg = p.source === 'boss_stomp' ? 1 : 1;
         this.player.takeDamage(dmg, p.source);
       }
+      // Batch 9: 敌人攻击震动
+      if (p.source === 'enemy') {
+        this.screenShake.light();
+      }
+    });
+
+    // Batch 9: 玩家死亡 → 强烈震动
+    this.bus.on(GameEvent.PLAYER_DEATH, (_payload) => {
+      this.screenShake.heavy();
     });
 
     // ── 对话状态管理（Batch 6）─────────────────────
@@ -545,11 +620,13 @@ export class Level1Scene extends Phaser.Scene {
     });
 
     this.bus.on(GameEvent.DIALOG_END, (_payload) => {
+      console.log(`[Level1Scene] 🔍 DIALOG_END handler — dialogSys.isActive=${this.dialogSys.isActive}, _dialogActive=${this._dialogActive}, captureSys.isActive=${this.captureSys?.isActive}`);
       // ⚠️ 关键守卫：DIALOG_END 后可能同步触发 chained next 或 CaptureSystem 推进，
       //    此时 dialogSys.isActive 已变为 true（新对话已开始）。
       //    只在对话链真正结束时才重置状态，否则会覆写新对话的激活标志。
       if (this.dialogSys.isActive) {
         // 链式对话或擒获流程触发了下一句——什么都不做
+        console.log('[Level1Scene] 🔍 DIALOG_END → dialogSys.isActive=true → return (守卫)');
         return;
       }
 
@@ -586,23 +663,41 @@ export class Level1Scene extends Phaser.Scene {
       this.dialogSys.triggerByEvent(DialogTrigger.RELEASE);
     });
 
+    // ── 碎片收集（Batch 9）─────────────────────────
+    this.bus.on(GameEvent.FRAGMENT_COLLECTED, (payload) => {
+      const p = payload as { fragmentId: string };
+      if (!this._fragmentsCollected.includes(p.fragmentId)) {
+        this._fragmentsCollected.push(p.fragmentId);
+      }
+      const frag = this.storySys.getFragment(p.fragmentId);
+      console.log(`[Level1Scene] 📜 碎片收集: ${p.fragmentId} — "${frag?.title}"`);
+      // 碎片发现提示（通过对话系统显示简短提示）
+      this.dialogSys.triggerByEvent(DialogTrigger.FRAGMENT_FOUND);
+    });
+
     // 擒获完成 → 记录统计 + 跳转结算（Batch 8: SaveSystem 串联）
     // 🛡️ 安全网: 即使 delayedCall 被异常清除也保证跳转
     this.bus.on(GameEvent.CAPTURE_COMPLETE, (_payload) => {
+      console.log('[Level1Scene] 🔍 CAPTURE_COMPLETE handler 触发');
+      this._captureCompleteFired = true;
       const timeSec = Math.floor((this.time.now - this._startTime) / 1000);
       const saveSys = SaveSystem.getInstance();
 
-      saveSys.recordLevelCompletion({
-        levelId: 'level_01',
-        completed: true,
-        timeSec,
-        score: this._score,
-        deaths: this._deathCount,
-        fragmentsCollected: [],
-        playStyle: '',
-      });
+      try {
+        saveSys.recordLevelCompletion({
+          levelId: 'level_01',
+          completed: true,
+          timeSec,
+          score: this._score,
+          deaths: this._deathCount,
+          fragmentsCollected: [...this._fragmentsCollected],
+          playStyle: '',
+        });
 
-      saveSys.unlockLevel('level_02');
+        saveSys.unlockLevel('level_02');
+      } catch (e) {
+        console.error('[Level1Scene] ❌ SaveSystem 操作异常:', e);
+      }
 
       console.log(`[Level1Scene] 🏆 擒获完成 — 时间:${timeSec}s 得分:${this._score} 死亡:${this._deathCount}`);
       console.log('[Level1Scene] → 0.8s 后跳转结算');
@@ -617,14 +712,21 @@ export class Level1Scene extends Phaser.Scene {
       this.player.unlockFromCutscene();
 
       this.time.delayedCall(800, () => {
-        this.scene.start('ResultScene', {
-          levelId: 'level_01',
-          levelName: '西洱河初战',
-          score: this._score,
-          timeSec,
-          deaths: this._deathCount,
-          nextLevelId: 'level_02',
-        });
+        console.log('[Level1Scene] 🔍 delayedCall(800) 回调触发，准备 scene.start(ResultScene)');
+        this._resultSceneStarted = true;
+        try {
+          this.scene.start('ResultScene', {
+            levelId: 'level_01',
+            levelName: '西洱河初战',
+            score: this._score,
+            timeSec,
+            deaths: this._deathCount,
+            nextLevelId: 'level_02',
+          });
+          console.log('[Level1Scene] ✅ scene.start(ResultScene) 已调用');
+        } catch (e) {
+          console.error('[Level1Scene] ❌ scene.start 异常:', e);
+        }
       });
     });
   }
@@ -652,6 +754,102 @@ export class Level1Scene extends Phaser.Scene {
 
   private setupBossHealthBar(): void {
     this.bossHealthBar = new BossHealthBar(this);
+  }
+
+  // ─────────────────────────────────────────────────
+  // 故事碎片系统（Batch 9）
+  // ─────────────────────────────────────────────────
+  private setupStorySystem(): void {
+    this.storySys = StorySystem.getInstance();
+    // 加载碎片数据到全局注册表
+    const frags = (fragmentsData as { fragments: Array<{ id: string; levelId: string; title: string; text: string; unlockHint: string }> }).fragments;
+    StorySystem.loadFragments(frags);
+    console.log(`[Level1Scene] StorySystem — ${frags.length} 个碎片已注册`);
+  }
+
+  // ─────────────────────────────────────────────────
+  // 屏幕震动（Batch 9）
+  // ─────────────────────────────────────────────────
+  private setupScreenShake(): void {
+    this.screenShake = new ScreenShake(this);
+  }
+
+  // ─────────────────────────────────────────────────
+  // 放置隐藏故事碎片（Batch 9）
+  // ─────────────────────────────────────────────────
+  private fragmentSprite!: Phaser.Physics.Arcade.Sprite;
+  private _fragmentPulseTween!: Phaser.Tweens.Tween;
+
+  private spawnFragment(): void {
+    // 碎片位置：高台附近（x≈1000, y=GAME_HEIGHT-280）
+    // 需要玩家探索跳跃才能到达
+
+    // 🔧 诊断: 如果已持久化收集过，跳过生成（避免"触摸无反应"）
+    if (this.storySys.isCollected('fragment_01')) {
+      console.log('[Level1Scene] ⚠️ 碎片 fragment_01 已在存档中收集过，跳过生成');
+      return;
+    }
+
+    // 🔧 位置微调：从平台左边缘 (980) 移到平台中部 (1020)，确保玩家容易触碰
+    const fx = 1020;
+    const fy = GAME_HEIGHT - 280;
+
+    this.fragmentSprite = this.physics.add.sprite(fx, fy, 'fragment_marker');
+    this.fragmentSprite.setDepth(20);
+    const fragBody = this.fragmentSprite.body as Phaser.Physics.Arcade.Body;
+    fragBody.setAllowGravity(false);
+    // 🔧 碰撞体扩大为 40×40 (大于视觉 16×16)，方便玩家触碰收集
+    fragBody.setSize(40, 40);
+    fragBody.setOffset(-12, -12);
+    // 🔧 显式确保 checkCollision 全部启用（防御：避免未知情况下被禁用）
+    fragBody.checkCollision.none = false;
+
+    console.log(`[Level1Scene] 🔍 碎片生成: (${fx}, ${fy}), body=${fragBody.width}x${fragBody.height}, checkCollision.none=${fragBody.checkCollision.none}`);
+
+    // 呼吸发光动画
+    this._fragmentPulseTween = this.tweens.add({
+      targets: this.fragmentSprite,
+      alpha: { from: 0.5, to: 1 },
+      scaleX: { from: 0.9, to: 1.2 },
+      scaleY: { from: 0.9, to: 1.2 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // 玩家 ↔ 碎片 overlap 收集
+    this.physics.add.overlap(
+      this.player as unknown as Phaser.Physics.Arcade.Sprite,
+      this.fragmentSprite,
+      () => {
+        console.log('[Level1Scene] 🔍 碎片 overlap 回调触发！');
+        if (!this.fragmentSprite.active) {
+          console.log('[Level1Scene] ⚠️ 碎片 active=false，跳过');
+          return;
+        }
+        const collected = this.storySys.collect('fragment_01');
+        console.log(`[Level1Scene] 🔍 collect() 返回: ${collected}`);
+        if (collected) {
+          // 收集特效：金光一闪 → 消失
+          this._fragmentPulseTween?.destroy();
+          this.tweens.add({
+            targets: this.fragmentSprite,
+            alpha: 0,
+            scaleX: 2,
+            scaleY: 2,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => {
+              this.fragmentSprite.setActive(false);
+              this.fragmentSprite.setVisible(false);
+            },
+          });
+        }
+      },
+      (_player, _frag) => this.fragmentSprite.active,
+      this,
+    );
   }
 
   // ─────────────────────────────────────────────────
@@ -685,6 +883,7 @@ export class Level1Scene extends Phaser.Scene {
     if (!this._bossSpawned && this.player.x >= BOSS_TRIGGER_X) {
       this._bossSpawned = true;
       this.boss.activate();
+      this.screenShake.bossEntrance();  // Batch 9: Boss 登场震动
       console.log('[Level1Scene] 👑 Boss 激活！孟获·骑象登场');
       // 延迟触发 Boss 登场台词 — 保存计时器引用以便擒获开始时取消
       this._bossIntroTimer = this.time.delayedCall(800, () => {
@@ -717,6 +916,14 @@ export class Level1Scene extends Phaser.Scene {
     try { this.captureSys?.reset(); } catch (e) { console.error('[Level1Scene] captureSys.reset 异常:', e); }
     try { this.enemyGroup?.destroy(true); } catch (e) { console.error('[Level1Scene] enemyGroup.destroy 异常:', e); }
     try { this.boss?.destroy(); } catch (e) { console.error('[Level1Scene] boss.destroy 异常:', e); }
+    try {
+      if (this._fragmentPulseTween) {
+        this._fragmentPulseTween.destroy();
+      }
+      if (this.fragmentSprite?.active) {
+        this.fragmentSprite.destroy();
+      }
+    } catch (e) { console.error('[Level1Scene] fragment 异常:', e); }
     // 清理未触发的计时器
     try {
       if (this._bossIntroTimer) {
