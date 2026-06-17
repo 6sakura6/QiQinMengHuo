@@ -248,7 +248,16 @@ export class DialogBox {
       this.updatePromptText();
     }
 
-    // 输入处理
+    // 不可跳过的对话：打字完成 + lock 到期 → 自动推进
+    // （firstPlayLockSec=0 时 lock 从第一帧即为 false，文本打完即刻推进）
+    if (this._done && !locked && !this._dialog.skippable) {
+      const dialogId = this._dialog.id;
+      this.hide();
+      this.bus.emit(GameEvent.DIALOG_END, { dialogId });
+      return;
+    }
+
+    // 输入处理（可跳过对话）
     if (this.isSkipPressed()) {
       if (!this._done) {
         // 还没打完 → 快进（直接显示全文）

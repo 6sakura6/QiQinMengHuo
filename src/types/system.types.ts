@@ -54,7 +54,6 @@ export interface DialogAction {
 export enum CaptureState {
   IDLE = 'idle',
   BOSS_DEFEATED = 'boss_defeated',
-  APPROACHING = 'approaching',
   CAPTURE_ANIM = 'capture_anim',
   DIALOG_PLAYING = 'dialog_playing',
   RELEASE_ANIM = 'release_anim',

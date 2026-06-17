@@ -79,6 +79,7 @@ export enum BossState {
   SWIPE = 'swipe',
   HURT = 'hurt',
   DEFEATED = 'defeated',
+  CAPTURED = 'captured',           // 被擒获（Batch 7）
   PHASE_TRANSITION = 'phase_transition',
 }
 

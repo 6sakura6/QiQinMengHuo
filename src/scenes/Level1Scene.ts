@@ -17,6 +17,7 @@ import { InputManager } from '../systems/InputManager';
 import { WeaponSystem } from '../systems/WeaponSystem';
 import { CameraSystem } from '../systems/CameraSystem';
 import { DialogSystem } from '../systems/DialogSystem';
+import { CaptureSystem } from '../systems/CaptureSystem';
 import type { DialogDataEntry } from '../systems/DialogSystem';
 import { EventBus } from '../core/EventBus';
 import { GameEvent } from '../types/events.types';
@@ -58,6 +59,7 @@ export class Level1Scene extends Phaser.Scene {
   private weaponSys!: WeaponSystem;
   private cameraSys!: CameraSystem;
   private dialogSys!: DialogSystem;
+  private captureSys!: CaptureSystem;
   private hud!: HUD;
   private bossHealthBar!: BossHealthBar;
   private dialogBox!: DialogBox;
@@ -89,6 +91,14 @@ export class Level1Scene extends Phaser.Scene {
   // create — 组装场景
   // ─────────────────────────────────────────────────
   create(): void {
+    // ⚠️ CRITICAL: 重置实例状态 — Phaser 的 scene.restart() 不重置类字段！
+    //    如果不重置，_bossSpawned 在死亡重启后仍为 true → Boss 永远不会激活
+    this._bossSpawned  = false;
+    this._score        = 0;
+    this._dialogActive = false;
+    this._totalEnemies = 0;
+    this._liveEnemies   = 0;
+
     // ⚠️ 必须绑定 shutdown 事件，否则 scene.restart() 不会清理旧资源
     this.events.on('shutdown', this.shutdown, this);
 
@@ -99,14 +109,15 @@ export class Level1Scene extends Phaser.Scene {
     this.spawnEnemies();
     this.setupCamera();
     this.spawnBoss();
+    this.setupDialog();        // 先创建 dialogSys
+    this.setupCapture();      // 再创建 captureSys，setDialogSys 能拿到有效引用
     this.setupCollisions();
     this.setupEventListeners();
     this.setupHUD();
     this.setupBossHealthBar();
-    this.setupDialog();
 
     this.bus.emit(GameEvent.LEVEL_START, { levelId: 'level_01' });
-    console.log('[Level1Scene] ✅ Batch 6 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss + 对话 就绪');
+    console.log('[Level1Scene] ✅ Batch 7 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss + 对话 + 擒获 就绪');
     console.log('  WASD/方向键移动，Space/W/↑ 跳跃，J/Z 射击（八方向弩箭）');
     console.log(`  敌人数：${this._totalEnemies}`);
   }
@@ -475,13 +486,12 @@ export class Level1Scene extends Phaser.Scene {
       }
     });
 
-    // Boss 被击败（Batch 5）
+    // Boss 被击败（Batch 7: 交给 CaptureSystem 接管）
     this.bus.on(GameEvent.BOSS_DEFEATED, (payload) => {
       const p = payload as { bossId: string; scoreValue: number };
       console.log(`[Level1Scene] 👑 Boss 击败: ${p.bossId} — 准备进入擒获流程，获得 ${p.scoreValue} 分`);
       this._score += p.scoreValue;
-      // 擒获流程由 Batch 7 CaptureSystem 接管
-      // 此处仅记录 Boss 击败事件
+      this.captureSys.startCapture(this.boss);
     });
 
     // Boss AOE 伤害转发（Batch 5）
@@ -503,6 +513,14 @@ export class Level1Scene extends Phaser.Scene {
     });
 
     this.bus.on(GameEvent.DIALOG_END, (_payload) => {
+      // ⚠️ 关键守卫：DIALOG_END 后可能同步触发 chained next 或 CaptureSystem 推进，
+      //    此时 dialogSys.isActive 已变为 true（新对话已开始）。
+      //    只在对话链真正结束时才重置状态，否则会覆写新对话的激活标志。
+      if (this.dialogSys.isActive) {
+        // 链式对话或擒获流程触发了下一句——什么都不做
+        return;
+      }
+
       this._dialogActive = false;
       this.player.unlockFromCutscene();
       this.physics.resume();   // 恢复物理模拟
@@ -516,6 +534,28 @@ export class Level1Scene extends Phaser.Scene {
         // ⚠️ 守卫：若 BOSS_INTRO 对话仍在播放则跳过，避免时序竞争
         this.dialogSys.triggerByEvent(DialogTrigger.BOSS_PHASE);
       }
+    });
+
+    // ── 擒获流程事件（Batch 7）────────────────────
+    // 擒获对话：孟获被擒后的不服台词
+    this.bus.on(GameEvent.CAPTURE_DIALOG_START, (_payload) => {
+      this.dialogSys.triggerByEvent(DialogTrigger.BOSS_DEFEAT);
+    });
+
+    // 释放对话：诸葛亮释放孟获台词
+    this.bus.on(GameEvent.CAPTURE_RELEASE_START, (_payload) => {
+      this.dialogSys.triggerByEvent(DialogTrigger.RELEASE);
+    });
+
+    // 擒获完成 → 场景跳转（延迟以等待 Boss 淡出动画完成）
+    this.bus.on(GameEvent.CAPTURE_COMPLETE, (_payload) => {
+      console.log('[Level1Scene] 🏆 擒获完成，0.8s 后跳转结算');
+      this.time.delayedCall(800, () => {
+        this.scene.start('ResultScene', {
+          levelId: 'level_01',
+          score: this._score,
+        });
+      });
     });
   }
 
@@ -542,6 +582,14 @@ export class Level1Scene extends Phaser.Scene {
 
   private setupBossHealthBar(): void {
     this.bossHealthBar = new BossHealthBar(this);
+  }
+
+  // ─────────────────────────────────────────────────
+  // 擒获系统（Batch 7）
+  // ─────────────────────────────────────────────────
+  private setupCapture(): void {
+    this.captureSys = new CaptureSystem(this);
+    this.captureSys.setDialogSys(this.dialogSys);
   }
 
   // ─────────────────────────────────────────────────
@@ -590,6 +638,7 @@ export class Level1Scene extends Phaser.Scene {
     this.bossHealthBar?.destroy();
     this.dialogBox?.destroy();
     this.dialogSys?.reset();
+    this.captureSys?.reset();
     this.enemyGroup?.destroy(true);
     this.boss?.destroy();
     this.bus.clear();

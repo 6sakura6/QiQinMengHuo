@@ -55,10 +55,7 @@ export enum GameEvent {
   // ---- 镜头 ----
   CAMERA_SHAKE = 'camera:shake',
   CAMERA_LOCK = 'camera:lock',
-  CAMERA_UNLOCK = 'camera:unlock',
-
-  // ---- 场景 ----
-  SCENE_TRANSITION = 'scene:transition',
+  CAMERA_UNLOCK = 'camera:unlock'
 }
 
 // ============ 事件 Payload 类型映射 ============
@@ -101,6 +98,4 @@ export interface EventPayloadMap {
   [GameEvent.CAMERA_SHAKE]: { intensity: number; duration: number };
   [GameEvent.CAMERA_LOCK]: { target: Vec2; duration: number };
   [GameEvent.CAMERA_UNLOCK]: Record<string, never>;
-
-  [GameEvent.SCENE_TRANSITION]: { targetScene: string; data?: Record<string, unknown> };
 }

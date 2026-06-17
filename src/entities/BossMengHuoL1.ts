@@ -1,7 +1,8 @@
 // ============================================================
-// BossMengHuoL1.ts — 第 1 关孟获 Boss「骑象孟获」（Batch 5）
-// 状态机：IDLE → WANDER/CHARGING/STOMP/SWIPE → HURT → DEFEATED → PHASE_TRANSITION
+// BossMengHuoL1.ts — 第 1 关孟获 Boss「骑象孟获」（Batch 5 + Batch 7）
+// 状态机：IDLE → CHARGING/STOMP/SWIPE → HURT → DEFEATED → CAPTURED → PHASE_TRANSITION
 // 三阶段：Phase 1(100-70%)走近战 / Phase 2(70-30%)解锁冲锋 / Phase 3(30-0%)解锁踏地+横扫 1.3x速
+// Batch 7: triggerDefeat() 不再淡出消失，改为保持可见等待擒获状态机接管；新增 enterCaptured()
 // ============================================================
 
 import Phaser from 'phaser';
@@ -406,7 +407,7 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
   }
 
   // ═══════════════════════════════════════════════════
-  // 击败 → 触发擒获
+  // 击败 → 触发擒获（Batch 7: 不再淡出消失，保持可见）
   // ═══════════════════════════════════════════════════
   triggerDefeat(): void {
     if (this._isDefeated) return;
@@ -416,34 +417,42 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setVelocity(0, 0);
     body.enable = false;
-    // ⚠️ 立即从物理世界移除 body，否则 debug: true 模式下
-    //    调试渲染器仍会画紫色碰撞盒（body.enable=false 不阻止渲染）
-    this.scene.physics.world.remove(body);
+    // ⚠️ Batch 7: 不再 remove body / fadeOut — 保持可见，等待 CaptureSystem 接管
+    // 注意：physics.debug=true 时 body.enable=false 仍可能渲染紫色碰撞盒轮廓，
+    // 此为 Phaser 调试渲染器的已知行为，生产环境无影响。
 
-    // 击败视觉：白闪 + 淡出消失
+    // 击败视觉：白闪 → 灰色（战败但仍可见）
     this.setTint(0xffffff);
-    this.scene.tweens.add({
-      targets: this,
-      alpha: 0,
-      duration: 1200,
-      ease: 'Sine.easeInOut',
-      delay: 300,          // 先白闪 300ms，再淡出
-      onComplete: () => {
-        this.setVisible(false);
-      },
+    this.scene.time.delayedCall(400, () => {
+      if (this._state === BossState.DEFEATED && this.active) {
+        this.setTint(0x666666);
+      }
     });
 
     this.bus.emit(GameEvent.BOSS_DEFEATED, {
       bossId: this._cfg.id,
       scoreValue: this._cfg.scoreValue,
     });
+    // CAMERA_LOCK / CAMERA_SHAKE 已移至 CaptureSystem 统一管理
+  }
 
-    // 锁定镜头 + 震动
-    this.bus.emit(GameEvent.CAMERA_LOCK, {
-      target: { x: this.x, y: this.y - 40 },
-      duration: 2000,
+  // ═══════════════════════════════════════════════════
+  // 进入擒获状态（Batch 7: 由 CaptureSystem 调用）
+  // ═══════════════════════════════════════════════════
+  enterCaptured(): void {
+    this._state = BossState.CAPTURED;
+    this.clearTint();
+    this.setTint(0x4488ff);  // 蓝色 = 被擒
+
+    // 被擒缩放演出
+    this.scene.tweens.add({
+      targets: this,
+      scaleX: 0.75,
+      scaleY: 0.75,
+      duration: 400,
+      yoyo: true,
+      ease: 'Back.easeOut',
     });
-    this.bus.emit(GameEvent.CAMERA_SHAKE, { intensity: 40, duration: 500 });
   }
 
   // ═══════════════════════════════════════════════════

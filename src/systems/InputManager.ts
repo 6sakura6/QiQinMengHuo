@@ -110,12 +110,18 @@ export class InputManager {
     return this._snapshot;
   }
 
-  /** 场景销毁时清理 */
+  /** 场景销毁时清理 Key 对象，防止内存泄露 */
   destroy(): void {
-    const kb = this.scene.input.keyboard!;
-    Object.values(this.keys)
-      .flat()
-      .forEach((k) => kb.removeKey(k));
+    // 逐 Key 调用 destroy()（内部触发 removeAllListeners + plugin.removeKey）
+    // 比直接 kb.removeKey() 更可靠：即使 keyboard plugin 已销毁，key.destroy() 仍安全
+    for (const keys of Object.values(this.keys)) {
+      for (const k of keys) {
+        k.destroy();
+      }
+    }
+    // 断引用，确保 GC 能回收 InputManager 自身
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (this.keys as any) = null;
   }
 
   private emptySnapshot(): InputSnapshot {

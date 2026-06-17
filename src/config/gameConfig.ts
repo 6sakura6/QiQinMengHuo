@@ -5,6 +5,7 @@
 import Phaser from 'phaser';
 import { BootScene } from '../scenes/BootScene';
 import { Level1Scene } from '../scenes/Level1Scene';
+import { ResultScene } from '../scenes/ResultScene';
 import { GAME_WIDTH, GAME_HEIGHT, GRAVITY } from './constants';
 
 /** 游戏配置 */
@@ -23,7 +24,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
       debug: true,           // 调试碰撞盒（验收完成后改回 false）
     },
   },
-  scene: [BootScene, Level1Scene],   // Batch 1 加入 Level1Scene
+  scene: [BootScene, Level1Scene, ResultScene],   // Batch 8 加入 ResultScene
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
