@@ -1,9 +1,6 @@
 // ============================================================
 // MainMenuScene.ts — 主菜单场景（Batch 10）
 // 像素三国风格主菜单：标题 → 开始游戏 / 继续游戏
-// Batch 11 热修复：修复"重置进度"二次确认无反应 Bug
-//   根因：inputLocked=true 后 selectOption() 被自己拦截，
-//         新增 _awaitingResetConfirm 标志绕过拦截。
 // ============================================================
 
 import Phaser from 'phaser';
@@ -32,13 +29,6 @@ export class MainMenuScene extends Phaser.Scene {
   private versionText!: Phaser.GameObjects.Text;
   private inputLocked = false;
   private confirmResetTimer?: Phaser.Time.TimerEvent;
-  /**
-   * 正在等待"重置进度"二次确认。
-   * 此状态下 Enter/Space/点击 不被 inputLocked 拦截，
-   * 而是直接触发确认回调或取消。
-   */
-  private _awaitingResetConfirm = false;
-  private _confirmResetCallback?: () => void;
 
   constructor() {
     super({ key: 'MainMenuScene' });
@@ -125,17 +115,12 @@ export class MainMenuScene extends Phaser.Scene {
       this.input.keyboard.on('keydown-DOWN', () => this.moveCursor(1));
       this.input.keyboard.on('keydown-ENTER', () => this.selectOption());
       this.input.keyboard.on('keydown-SPACE', () => this.selectOption());
-      // ESC：若在等待二次确认中，取消确认
-      this.input.keyboard.on('keydown-ESC', () => this.cancelResetConfirm());
     }
 
     // 9. 鼠标点击支持
     this.optionTexts.forEach((txt, i) => {
       txt.setInteractive({ useHandCursor: true });
-      txt.on('pointerover', () => {
-        // 等待确认期间禁止鼠标导航切换选项
-        if (!this._awaitingResetConfirm) this.moveToIndex(i);
-      });
+      txt.on('pointerover', () => this.moveToIndex(i));
       txt.on('pointerdown', () => this.selectOption());
     });
 
@@ -256,8 +241,7 @@ export class MainMenuScene extends Phaser.Scene {
   // 光标导航
   // ──────────────────────────────────────
   private moveCursor(dir: number): void {
-    // 等待二次确认时禁止切换选项
-    if (this.inputLocked || this._awaitingResetConfirm) return;
+    if (this.inputLocked) return;
 
     let newIndex = this.selectedIndex + dir;
 
@@ -293,16 +277,6 @@ export class MainMenuScene extends Phaser.Scene {
   // selectOption — 执行选中操作
   // ──────────────────────────────────────
   private selectOption(): void {
-    // ── 特殊情况：正在等待二次确认 ──
-    // 此时不管 inputLocked，直接触发确认回调
-    if (this._awaitingResetConfirm) {
-      if (this._confirmResetCallback) {
-        this._confirmResetCallback();
-      }
-      return;
-    }
-
-    // 正常情况
     if (this.inputLocked) return;
 
     const opt = this.menuOptions[this.selectedIndex];
@@ -342,81 +316,52 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private confirmReset(): void {
-    // ── 进入二次确认等待状态 ──
-    this._awaitingResetConfirm = true;
-    this.inputLocked = true; // 同时锁定，防止 pointerover 切换选项
+    // 输入锁：防止确认期间误操作
+    this.inputLocked = true;
 
-    // 提示文字
-    const confirmTxt = this.add.text(W / 2, H - 80, '确定要清除所有进度吗？(再按一次确认 / ESC 取消)', {
-      fontSize: '11px',
+    // 简单确认：再次按 Enter 确认
+    const confirmTxt = this.add.text(W / 2, H - 80, '确定要清除所有进度吗？(再按一次确认)', {
+      fontSize: '13px',
       fontFamily: '"Press Start 2P", monospace',
       color: '#ef4444',
     }).setOrigin(0.5).setDepth(20).setAlpha(0);
 
     this.tweens.add({ targets: confirmTxt, alpha: 1, duration: 200 });
 
-    // "重置进度"文字变红提示
-    this.optionTexts[2]?.setColor('#ef4444');
+    // 临时覆盖 selectOption — 仅允许"重置进度"项确认
+    const origAction = this.menuOptions[2].action;
+    this.menuOptions[2].action = () => {
+      const saveSys = SaveSystem.getInstance();
+      saveSys.resetAll();
+      confirmTxt.destroy();
 
-    // ── 确认回调（二次 Enter/点击 触发）──
-    const doReset = () => {
-      this._awaitingResetConfirm = false;
-      this._confirmResetCallback = undefined;
-
+      // 取消超时定时器
       if (this.confirmResetTimer) {
         this.confirmResetTimer.remove(false);
         this.confirmResetTimer = undefined;
       }
 
-      if (confirmTxt.active) confirmTxt.destroy();
-
-      const saveSys = SaveSystem.getInstance();
-      saveSys.resetAll();
-
       this.inputLocked = false;
+      this.menuOptions[2].action = origAction;
 
       // 重置后刷新菜单
       this.refreshMenu();
-      console.log('[MainMenuScene] 🗑️ 重置进度完成');
     };
 
-    this._confirmResetCallback = doReset;
-
-    // 3 秒超时自动取消
+    // 3 秒后取消确认
     this.confirmResetTimer = this.time.delayedCall(3000, () => {
-      this.cancelResetConfirm(confirmTxt);
-    });
-  }
-
-  /** 取消重置确认（ESC 或超时） */
-  private cancelResetConfirm(confirmTxtRef?: Phaser.GameObjects.Text): void {
-    if (!this._awaitingResetConfirm) return;
-
-    this._awaitingResetConfirm = false;
-    this._confirmResetCallback = undefined;
-
-    if (this.confirmResetTimer) {
-      this.confirmResetTimer.remove(false);
+      if (confirmTxt.active) {
+        this.tweens.add({
+          targets: confirmTxt,
+          alpha: 0,
+          duration: 300,
+          onComplete: () => confirmTxt.destroy(),
+        });
+        this.menuOptions[2].action = origAction;
+        this.inputLocked = false;
+      }
       this.confirmResetTimer = undefined;
-    }
-
-    // 恢复"重置进度"文字颜色
-    this.optionTexts[2]?.setColor('#e2e8f0');
-
-    const target = confirmTxtRef ?? this.children.list.find(
-      (c) => c instanceof Phaser.GameObjects.Text && (c as Phaser.GameObjects.Text).text.includes('清除所有进度')
-    ) as Phaser.GameObjects.Text | undefined;
-
-    if (target && target.active) {
-      this.tweens.add({
-        targets: target,
-        alpha: 0,
-        duration: 300,
-        onComplete: () => (target as Phaser.GameObjects.Text).destroy(),
-      });
-    }
-
-    this.inputLocked = false;
+    });
   }
 
   /** 刷新菜单状态（如重置后） */
@@ -425,8 +370,6 @@ export class MainMenuScene extends Phaser.Scene {
     this.optionTexts.forEach((txt, i) => {
       if (i === 1) {
         txt.setColor('#475569');
-      } else if (i === 2) {
-        txt.setColor('#22c55e'); // 重置后光标仍在第 2 项，保持选中色
       }
     });
   }

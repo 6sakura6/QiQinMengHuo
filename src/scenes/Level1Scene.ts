@@ -9,6 +9,7 @@
 // Batch 8 追加：SaveSystem 串联 + 死亡/时间追踪
 // Batch 8 热修复：防 interrupted-dialog 冻屏（取消 BOSS_INTRO 计时器 + physics 状态守卫）
 // Batch 9 追加：StorySystem（碎片收集）+ ScreenShake（四级震动）
+// Batch 11 追加：AudioManager 音效占位调用
 // ============================================================
 
 import Phaser from 'phaser';
@@ -30,6 +31,7 @@ import { DialogBox } from '../ui/DialogBox';
 import { SaveSystem } from '../systems/SaveSystem';
 import { StorySystem } from '../systems/StorySystem';
 import { ScreenShake } from '../systems/ScreenShake';
+import { AudioManager, SFX, BGM } from '../systems/AudioManager';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../config/constants';
 import dialogsData from '../data/dialogs.json';
 import fragmentsData from '../data/fragments.json';
@@ -72,6 +74,9 @@ export class Level1Scene extends Phaser.Scene {
   private storySys!: StorySystem;
   private screenShake!: ScreenShake;
   private bus = EventBus.getInstance();
+
+  // ── 音频管理器（Batch 11）─────────────────────────
+  private audioMgr!: AudioManager;
 
   // ── 物理组 ────────────────────────────────────────
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
@@ -148,9 +153,10 @@ export class Level1Scene extends Phaser.Scene {
     this.setupStorySystem();     // Batch 9: 故事碎片
     this.setupScreenShake();     // Batch 9: 屏幕震动
     this.spawnFragment();        // Batch 9: 隐藏碎片放置
+    this.setupAudio();           // Batch 11: 音频管理器初始化 + BGM
 
     this.bus.emit(GameEvent.LEVEL_START, { levelId: 'level_01' });
-    console.log('[Level1Scene] ✅ Batch 9 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss + 对话 + 擒获 + SaveSystem + 碎片 + 震动 就绪');
+    console.log('[Level1Scene] ✅ Batch 11 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss + 对话 + 擒获 + SaveSystem + 碎片 + 震动 + AudioManager 就绪');
     console.log('  WASD/方向键移动，Space/W/↑ 跳跃，J/Z 射击（八方向弩箭）');
     console.log(`  敌人数：${this._totalEnemies}`);
   }
@@ -595,6 +601,7 @@ export class Level1Scene extends Phaser.Scene {
       const p = payload as any;
       this._liveEnemies = Math.max(0, this._liveEnemies - 1);
       this._score += p.scoreValue ?? 100;
+      this.audioMgr.playSfx(SFX.ENEMY_DEATH);    // 🔊 敌人死亡音效
       if (this._liveEnemies <= 0) {
         this.bus.emit(GameEvent.ALL_ENEMIES_CLEARED, {
           count: this._totalEnemies,
@@ -603,11 +610,14 @@ export class Level1Scene extends Phaser.Scene {
       }
     });
 
-  // Boss 被击败（Batch 7: 交给 CaptureSystem 接管）
+    // Boss 被击败（Batch 7: 交给 CaptureSystem 接管）
     this.bus.on(GameEvent.BOSS_DEFEATED, (payload) => {
       const p = payload as { bossId: string; scoreValue: number };
       console.log(`[Level1Scene] 👑 Boss 击败: ${p.bossId} — 准备进入擒获流程，获得 ${p.scoreValue} 分`);
       this._score += p.scoreValue;
+      this.audioMgr.playSfx(SFX.CAPTURE_START);  // 🔊 Boss 被擒音效
+      // 切换为擒获 BGM（若有）
+      // this.audioMgr.playBgm(BGM.BOSS);          // 占位：后续可切换 Boss 被擒 BGM
 
       // 🛡️ 标记擒获已启动 + 取消 Boss 登场对话
       this._captureStarted = true;
@@ -629,11 +639,14 @@ export class Level1Scene extends Phaser.Scene {
       if (p.source === 'enemy') {
         this.screenShake.light();
       }
+      // Batch 11: 玩家受伤音效
+      this.audioMgr.playSfx(SFX.PLAYER_HIT, { volume: 0.8 });
     });
 
-    // Batch 9: 玩家死亡 → 强烈震动
+    // Batch 9: 玩家死亡 → 强烈震动  |  Batch 11: 死亡音效
     this.bus.on(GameEvent.PLAYER_DEATH, (_payload) => {
       this.screenShake.heavy();
+      this.audioMgr.playSfx(SFX.PLAYER_DEATH);
     });
 
     // ── 对话状态管理（Batch 6）─────────────────────
@@ -700,6 +713,7 @@ export class Level1Scene extends Phaser.Scene {
       }
       const frag = this.storySys.getFragment(p.fragmentId);
       console.log(`[Level1Scene] 📜 碎片收集: ${p.fragmentId} — "${frag?.title}"`);
+      this.audioMgr.playSfx(SFX.FRAGMENT_PICK);  // 🔊 碎片拾取音效
       // 碎片发现提示（通过对话系统显示简短提示）
       this.dialogSys.triggerByEvent(DialogTrigger.FRAGMENT_FOUND);
     });
@@ -729,6 +743,8 @@ export class Level1Scene extends Phaser.Scene {
       }
 
       console.log(`[Level1Scene] 🏆 擒获完成 — 时间:${timeSec}s 得分:${this._score} 死亡:${this._deathCount}`);
+      this.audioMgr.playSfx(SFX.CAPTURE_DONE);   // 🔊 擒获完成胜利音效
+      this.audioMgr.stopBgm();                    // 停止关卡 BGM，进入结算静默
       console.log('[Level1Scene] → 0.8s 后跳转结算');
 
       // 🛡️ 确保 physics 已恢复（防御：对话链异常可能导致 physics 仍暂停）
@@ -913,6 +929,8 @@ export class Level1Scene extends Phaser.Scene {
       this._bossSpawned = true;
       this.boss.activate();
       this.screenShake.bossEntrance();
+      this.audioMgr.playSfx(SFX.BOSS_ENTER);     // 🔊 Boss 登场音效
+      this.audioMgr.playBgm(BGM.BOSS);            // 🎵 切换 Boss BGM
       console.log('[Level1Scene] 👑 Boss 激活！孟获·骑象登场');
       // 🛡️ 自管理延迟（不用 Phaser TimerManager，避免其先于 update() 触发 → 帧序竞争）
       this._bossIntroDelayMs = 800;
@@ -957,7 +975,19 @@ export class Level1Scene extends Phaser.Scene {
     } catch (e) { console.error('[Level1Scene] fragment 异常:', e); }
     // 清理 Boss 登场延迟标记
     this._bossIntroDelayMs = 0;
+    try { this.audioMgr?.destroy(); } catch (e) { console.error('[Level1Scene] audioMgr.destroy 异常:', e); }
     try { this.bus.clear(); } catch (e) { console.error('[Level1Scene] bus.clear 异常:', e); }
+  }
+
+  // ─────────────────────────────────────────────────
+  // 音频管理器初始化（Batch 11）
+  // ─────────────────────────────────────────────────
+  private setupAudio(): void {
+    this.audioMgr = AudioManager.getInstance();
+    this.audioMgr.init(this);
+    // 播放关卡 BGM（资源未加载时静默忽略，不崩溃）
+    this.audioMgr.playBgm(BGM.LEVEL_1);
+    console.log('[Level1Scene] 🎵 AudioManager 初始化完成，BGM 占位启动');
   }
 
   // ─────────────────────────────────────────────────
