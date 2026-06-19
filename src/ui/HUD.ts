@@ -1,8 +1,6 @@
 // ============================================================
-// HUD.ts — 游戏内抬头显示（Batch 4）
-// 职责：血条、武器冷却、敌人数、分数、操作提示
-// 架构：所有元素 setScrollFactor(0)，固定于屏幕
-//       update() 接收 Scene 传入的最新数据
+// HUD.ts — 游戏内抬头显示（Phase 3 像素三国风格重构）
+// 血条（红）、弹药冷却（绿）、敌人数、分数、操作提示
 // ============================================================
 
 import Phaser from 'phaser';
@@ -11,36 +9,39 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config/constants';
 // ─── 布局常量 ────────────────────────────────────────
 const HP_BAR_X      = 16;
 const HP_BAR_Y      = 16;
-const HP_BAR_W      = 160;
+const HP_BAR_W      = 180;
 const HP_BAR_H      = 18;
-const HP_BAR_RADIUS = 5;
 
 const CD_BAR_X      = 16;
-const CD_BAR_Y      = 40;
-const CD_BAR_W      = 160;
-const CD_BAR_H      = 8;
-const CD_BAR_RADIUS = 3;
+const CD_BAR_Y      = 38;
+const CD_BAR_W      = 180;
+const CD_BAR_H      = 6;
 
-const COUNTER_X     = GAME_WIDTH - 100;
+const AMMO_X        = GAME_WIDTH - 136;
+const AMMO_Y        = 16;
+
+const COUNTER_X     = GAME_WIDTH - 80;
 const COUNTER_Y     = 16;
 
-const SCORE_X       = GAME_WIDTH - 100;
-const SCORE_Y       = 40;
+const SCORE_X       = GAME_WIDTH - 80;
+const SCORE_Y       = 36;
 
 const HINT_X        = 10;
-const HINT_Y        = GAME_HEIGHT - 20;
+const HINT_Y        = GAME_HEIGHT - 16;
 
-// ─── 颜色 ────────────────────────────────────────────
-const COLOR_BG      = 0x000000;
-const COLOR_HP_BG   = 0x440000;
-const COLOR_HP_FILL = 0x33dd55;   // 健康绿
-const COLOR_HP_MID  = 0xddaa33;   // 半血橙
-const COLOR_HP_LOW  = 0xdd3333;   // 濒血红
-const COLOR_CD_EMPTY = 0x222222;
-const COLOR_CD_FILL  = 0xffaa00;
-const COLOR_TEXT    = '#ddeeff';
-const COLOR_HINT    = '#556677';
-const COLOR_ENEMY   = '#ff8866';
+// ─── Phase 3 设计颜色 ────────────────────────────────
+const COLOR_BG      = 0x192134;   // 深藏青面板
+const COLOR_HP_BG   = 0x192134;   // 血条背景
+const COLOR_HP_FILL = 0xEF4444;   // 亮红 HP
+const COLOR_HP_BORDER = 0xEF4444;
+const COLOR_CD_BG   = 0x192134;   // 冷却背景
+const COLOR_CD_FILL = 0x22C55E;   // 翠绿冷却
+const COLOR_CD_BORDER = 0x22C55E;
+const COLOR_AMMO_FILL = 0x22C55E;
+const COLOR_TEXT    = '#FEF3C7';  // 奶油白
+const COLOR_LABEL   = '#94A3B8';  // 灰蓝标签
+const COLOR_HINT    = '#475569';  // 提示文字
+const COLOR_ENEMY   = '#F59E0B';  // 琥珀金敌人
 
 /** 每帧更新所需数据 */
 export interface HUDData {
@@ -57,6 +58,11 @@ export class HUD {
   private hpBg!: Phaser.GameObjects.Graphics;
   private hpFill!: Phaser.GameObjects.Graphics;
   private hpLabel!: Phaser.GameObjects.Text;
+  private hpText!: Phaser.GameObjects.Text;
+
+  // ── 弹药/武器 ──
+  private ammoLabel!: Phaser.GameObjects.Text;
+  private ammoText!: Phaser.GameObjects.Text;
 
   // ── 冷却条 ──
   private cdBg!: Phaser.GameObjects.Graphics;
@@ -78,37 +84,70 @@ export class HUD {
   }
 
   // ─────────────────────────────────────────────────
-  // 创建所有 UI 元素
+  // 创建所有 UI 元素（Phase 3 像素风格）
   // ─────────────────────────────────────────────────
   private create(): void {
     const depth = 200;
 
-    // ── 血条背景 ──
+    // ── 血条背景 + 像素边框 ──
     this.hpBg = this.scene.add.graphics()
       .setScrollFactor(0).setDepth(depth);
-    this.hpBg.fillStyle(COLOR_HP_BG, 0.8);
-    this.hpBg.fillRoundedRect(HP_BAR_X, HP_BAR_Y, HP_BAR_W, HP_BAR_H, HP_BAR_RADIUS);
+    this.hpBg.fillStyle(COLOR_HP_BG, 0.9);
+    this.hpBg.fillRect(HP_BAR_X, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
+    this.hpBg.lineStyle(3, COLOR_HP_BORDER, 1);
+    this.hpBg.strokeRect(HP_BAR_X, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
 
     // ── 血条填充 ──
     this.hpFill = this.scene.add.graphics()
       .setScrollFactor(0).setDepth(depth + 1);
 
-    // ── HP 文字 ──
+    // ── HP 标签 ──
     this.hpLabel = this.scene.add.text(
+      HP_BAR_X + 6, HP_BAR_Y - 2,
+      'HP', {
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: '8px',
+        color: '#EF4444',
+      },
+    ).setOrigin(0, 0).setScrollFactor(0).setDepth(depth + 2);
+
+    // ── HP 数值（血条内居中） ──
+    this.hpText = this.scene.add.text(
       HP_BAR_X + HP_BAR_W / 2, HP_BAR_Y + HP_BAR_H / 2,
       '', {
         fontFamily: 'monospace',
-        fontSize: '12px',
+        fontSize: '10px',
         fontStyle: 'bold',
-        color: '#ffffff',
+        color: COLOR_TEXT,
       },
     ).setOrigin(0.5).setScrollFactor(0).setDepth(depth + 2);
+
+    // ── 弹药/武器区 ──
+    this.ammoLabel = this.scene.add.text(
+      AMMO_X, AMMO_Y - 2,
+      '武器', {
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: '8px',
+        color: '#22C55E',
+      },
+    ).setOrigin(0, 0).setScrollFactor(0).setDepth(depth);
+    
+    this.ammoText = this.scene.add.text(
+      AMMO_X + 28, AMMO_Y + 8,
+      '弩', {
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: '12px',
+        color: '#22C55E',
+      },
+    ).setOrigin(0, 0.5).setScrollFactor(0).setDepth(depth + 1);
 
     // ── 冷却条背景 ──
     this.cdBg = this.scene.add.graphics()
       .setScrollFactor(0).setDepth(depth);
-    this.cdBg.fillStyle(COLOR_CD_EMPTY, 0.6);
-    this.cdBg.fillRoundedRect(CD_BAR_X, CD_BAR_Y, CD_BAR_W, CD_BAR_H, CD_BAR_RADIUS);
+    this.cdBg.fillStyle(COLOR_CD_BG, 0.8);
+    this.cdBg.fillRect(CD_BAR_X, CD_BAR_Y, CD_BAR_W, CD_BAR_H);
+    this.cdBg.lineStyle(2, COLOR_CD_BORDER, 1);
+    this.cdBg.strokeRect(CD_BAR_X, CD_BAR_Y, CD_BAR_W, CD_BAR_H);
 
     // ── 冷却条填充 ──
     this.cdFill = this.scene.add.graphics()
@@ -117,31 +156,30 @@ export class HUD {
     // ── 敌人数 ──
     this.enemyText = this.scene.add.text(
       COUNTER_X, COUNTER_Y, '', {
-        fontFamily: 'monospace',
-        fontSize: '13px',
-        fontStyle: 'bold',
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: '10px',
         color: COLOR_ENEMY,
       },
-    ).setScrollFactor(0).setDepth(depth);
+    ).setOrigin(1, 0).setScrollFactor(0).setDepth(depth);
 
     // ── 分数 ──
     this.scoreText = this.scene.add.text(
       SCORE_X, SCORE_Y, '', {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: COLOR_TEXT,
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: '9px',
+        color: COLOR_LABEL,
       },
-    ).setScrollFactor(0).setDepth(depth);
+    ).setOrigin(1, 0).setScrollFactor(0).setDepth(depth);
 
     // ── 操作提示 ──
     this.hintText = this.scene.add.text(
       HINT_X, HINT_Y,
-      'A/D / ← → 移动 | Space / W / ↑ 跳跃 | J / Z 射击（八方向弩箭）', {
+      'AD 移动 | W 跳跃 | J 射击', {
         fontFamily: 'monospace',
-        fontSize: '10px',
+        fontSize: '9px',
         color: COLOR_HINT,
       },
-    ).setScrollFactor(0).setDepth(depth);
+    ).setOrigin(0, 1).setScrollFactor(0).setDepth(depth);
   }
 
   // ─────────────────────────────────────────────────
@@ -156,7 +194,7 @@ export class HUD {
     if (hpPct !== this._lastHpPct) {
       this._lastHpPct = hpPct;
       this.drawHpBar(hpPct);
-      this.hpLabel.setText(`HP  ${data.hp} / ${data.maxHp}`);
+      this.hpText.setText(`${data.hp}/${data.maxHp}`);
     }
 
     // ── 冷却条 ──
@@ -169,60 +207,59 @@ export class HUD {
     if (enemies !== this._lastEnemies) {
       this._lastEnemies = enemies;
       this.enemyText.setText(
-        `👥 ${enemies} / ${data.totalEnemies}`,
+        `敌 ${enemies}/${data.totalEnemies}`,
       );
     }
 
     // ── 分数 ──
     if (data.score !== this._lastScore) {
       this._lastScore = data.score;
-      this.scoreText.setText(`⭐ ${data.score}`);
+      this.scoreText.setText(`分 ${data.score}`);
     }
   }
 
   // ─────────────────────────────────────────────────
-  // 血条绘制
+  // 血条绘制（像素风直边）
   // ─────────────────────────────────────────────────
   private drawHpBar(pct: number): void {
     const g = this.hpFill;
     g.clear();
 
-    const w = Math.max(0, HP_BAR_W * pct);
+    const w = Math.max(0, Math.floor(HP_BAR_W * pct));
     if (w <= 0) return;
 
-    // 渐变色：绿 → 橙 → 红
+    // 三段色：翠绿 > 琥珀金 > 亮红
     let color: number;
     if (pct > 0.5) {
-      color = COLOR_HP_FILL;
+      color = 0x22C55E;
     } else if (pct > 0.25) {
-      color = COLOR_HP_MID;
+      color = 0xF59E0B;
     } else {
-      color = COLOR_HP_LOW;
+      color = 0xEF4444;
     }
 
-    g.fillStyle(color, 0.9);
-    g.fillRoundedRect(HP_BAR_X, HP_BAR_Y, w, HP_BAR_H, HP_BAR_RADIUS);
+    g.fillStyle(color, 0.95);
+    g.fillRect(HP_BAR_X, HP_BAR_Y, w, HP_BAR_H);
 
-    // 满血微微发光
-    if (pct > 0.9) {
-      g.fillStyle(0xffffff, 0.12);
-      g.fillRoundedRect(HP_BAR_X, HP_BAR_Y, w, HP_BAR_H, HP_BAR_RADIUS);
+    // 满血微光泽
+    if (pct > 0.85) {
+      g.fillStyle(0xFFFFFF, 0.1);
+      g.fillRect(HP_BAR_X, HP_BAR_Y, w, HP_BAR_H / 2);
     }
   }
 
   // ─────────────────────────────────────────────────
-  // 冷却条绘制
+  // 冷却条绘制（像素风直边）
   // ─────────────────────────────────────────────────
   private drawCdBar(pct: number): void {
     const g = this.cdFill;
     g.clear();
 
-    const w = Math.max(0, CD_BAR_W * pct);
+    const w = Math.max(0, Math.floor(CD_BAR_W * pct));
     if (w <= 0) return;
 
-    const alpha = pct >= 1 ? 1 : 0.7;
-    g.fillStyle(COLOR_CD_FILL, alpha);
-    g.fillRoundedRect(CD_BAR_X, CD_BAR_Y, w, CD_BAR_H, CD_BAR_RADIUS);
+    g.fillStyle(COLOR_CD_FILL, pct >= 1 ? 1 : 0.7);
+    g.fillRect(CD_BAR_X, CD_BAR_Y, w, CD_BAR_H);
   }
 
   // ─────────────────────────────────────────────────
@@ -232,6 +269,9 @@ export class HUD {
     this.hpBg?.destroy();
     this.hpFill?.destroy();
     this.hpLabel?.destroy();
+    this.hpText?.destroy();
+    this.ammoLabel?.destroy();
+    this.ammoText?.destroy();
     this.cdBg?.destroy();
     this.cdFill?.destroy();
     this.enemyText?.destroy();

@@ -1,7 +1,6 @@
 // ============================================================
-// BossHealthBar.ts — Boss 血条 UI（Batch 5）
-// 显示在屏幕顶部中央：Boss 名称 + HP 条 + 百分比
-// 监听 BOSS_HP_CHANGED 事件，Boss 激活时显示 / 击败后隐藏
+// BossHealthBar.ts — Boss 血条 UI（Phase 3 像素三国风格重构）
+// 屏幕顶部：金色 Boss 名称 + 红底血条 + 百分比
 // ============================================================
 
 import Phaser from 'phaser';
@@ -11,10 +10,16 @@ import { GAME_WIDTH } from '../config/constants';
 
 // ─── 布局常量 ──────────────────────────────────────
 const BAR_WIDTH   = 320;
-const BAR_HEIGHT  = 14;
-const BAR_X       = (GAME_WIDTH - BAR_WIDTH) / 2;  // 居中
-const BAR_Y       = 50;                             // 顶部留白
-const NAME_Y      = BAR_Y - 18;                     // 名称在血条上方
+const BAR_HEIGHT  = 12;
+const BAR_X       = (GAME_WIDTH - BAR_WIDTH) / 2;
+const BAR_Y       = 52;
+const NAME_Y      = BAR_Y - 20;
+
+// ─── Phase 3 颜色 ──────────────────────────────────
+const COLOR_BG     = 0x192134;
+const COLOR_FILL   = 0xDC2626;   // 朱砂红
+const COLOR_NAME   = '#F59E0B';  // 琥珀金
+const COLOR_BORDER = 0xDC2626;
 
 export class BossHealthBar {
   private scene: Phaser.Scene;
@@ -46,11 +51,11 @@ export class BossHealthBar {
   private createElements(): void {
     const d = 200; // depth
 
-    // 名称文字
+    // 名称文字（Phase 3: 琥珀金像素体 + 黑色描边）
     this.nameText = this.scene.add.text(BAR_X + BAR_WIDTH / 2, NAME_Y, '', {
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      color: '#ffcc00',
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '11px',
+      color: COLOR_NAME,
       align: 'center',
       stroke: '#000000',
       strokeThickness: 3,
@@ -126,24 +131,23 @@ export class BossHealthBar {
     // 名称
     this.nameText.setText(this._bossName);
 
-    // 背景条
+    // 背景条（Phase 3: 深底 + 红边框）
     this.bgBar.clear();
-    this.bgBar.fillStyle(0x1a1a2e, 0.9);
+    this.bgBar.fillStyle(COLOR_BG, 0.9);
     this.bgBar.fillRect(BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT);
-    this.bgBar.lineStyle(1, 0x444466, 1);
+    this.bgBar.lineStyle(3, COLOR_BORDER, 1);
     this.bgBar.strokeRect(BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT);
 
-    // 填充条 — 三色渐阶（用分段模拟）
+    // 填充条 — 三段色阶
     this.fillBar.clear();
     let color: number;
     if (pct > 0.5) {
-      color = 0xcc3333;          // 暗红（健康）
+      color = 0xDC2626;          // 朱砂红
     } else if (pct > 0.25) {
-      color = 0xff4444;          // 亮红（警告）
+      color = 0xF59E0B;          // 琥珀金（警告）
     } else {
-      color = 0xff2222;          // 鲜红（危险）
+      color = 0xEF4444;          // 亮红（危险）
     }
-    // 30% 以下加闪烁效果（由 pulse() 每帧驱动 _pulseTime）
     const alpha = pct <= 0.3 ? 0.7 + 0.3 * Math.sin(this._pulseTime / 150) : 1;
     this.fillBar.fillStyle(color, alpha);
     this.fillBar.fillRect(BAR_X, BAR_Y, fillW, BAR_HEIGHT);

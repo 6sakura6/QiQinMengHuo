@@ -1,10 +1,21 @@
 // ============================================================
-// ResultScene.ts — 关卡结算场景（Batch 8 → Batch 10 串联）
-// 显示通关统计 + 存档记录 + 下一关/主菜单导航
+// ResultScene.ts — 关卡结算场景（Phase 3 像素三国风格重构）
+// 深藏青背景 + 暗金面板 + 像素角标
 // ============================================================
 
 import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem';
+
+// ─── Phase 3 设计颜色 ────────────────────────────────
+const COLOR_BG       = '#0F172A';
+const COLOR_PANEL    = '#192134';
+const COLOR_GOLD     = '#F59E0B';
+const COLOR_RED      = '#DC2626';
+const COLOR_GREEN    = '#22C55E';
+const COLOR_TEXT     = '#FEF3C7';
+const COLOR_SUB      = '#94A3B8';
+const COLOR_MUTED    = '#64748B';
+const COLOR_HIGHLIGHT = '#22C55E';
 
 export interface ResultData {
   levelId: string;
@@ -45,124 +56,138 @@ export class ResultScene extends Phaser.Scene {
       nextLevelId: raw?.nextLevelId as string | undefined,
     };
 
-    // ── 背景 ──────────────────────────────────────
-    this.cameras.main.setBackgroundColor('#0a1220');
+    // ── 背景（Phase 3 深藏青）──────────────────────
+    this.cameras.main.setBackgroundColor(COLOR_BG);
 
-    // 顶部装饰线
+    // 顶部金色装饰线
     const topLine = this.add.graphics();
-    topLine.fillStyle(0xffd700, 0.3);
-    topLine.fillRect(0, 0, W, 3);
+    topLine.fillStyle(0xF59E0B, 0.5);
+    topLine.fillRect(0, 0, W, 4);
+
+    // 四角像素红标
+    this.drawCornerMarkers();
 
     // ── 标题区 ────────────────────────────────────
-    const titleEmoji = this.add.text(W / 2, 60, '🏆', {
-      fontSize: '48px',
+    const title = this.add.text(W / 2, 55, '关卡完成', {
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '32px',
+      color: COLOR_GOLD,
     }).setOrigin(0.5).setAlpha(0);
 
-    const title = this.add.text(W / 2, 120, '擒获成功', {
-      fontFamily: 'monospace',
-      fontSize: '42px',
-      color: '#ffd700',
-      fontStyle: 'bold',
+    // 红色分隔线
+    const redDivider = this.add.graphics();
+    redDivider.fillStyle(0xDC2626, 1);
+    redDivider.fillRect(W / 2 - 120, 72, 240, 3);
+
+    const subtitle = this.add.text(W / 2, 95, this._data.levelName, {
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '14px',
+      color: COLOR_SUB,
     }).setOrigin(0.5).setAlpha(0);
 
-    const subtitle = this.add.text(W / 2, 165, this._data.levelName, {
-      fontFamily: 'monospace',
-      fontSize: '20px',
-      color: '#d4a574',
-    }).setOrigin(0.5).setAlpha(0);
-
-    // ── 统计面板 ──────────────────────────────────
-    const panelY = 200;
+    // ── 统计面板（Phase 3: 暗底 + 金色像素边框）───
+    const panelY = 120;
     const panelBg = this.add.graphics();
-    panelBg.fillStyle(0x1a1a2e, 0.85);
-    panelBg.fillRoundedRect(W / 2 - 180, panelY, 360, 200, 16);
-    panelBg.lineStyle(1, 0xffd700, 0.4);
-    panelBg.strokeRoundedRect(W / 2 - 180, panelY, 360, 200, 16);
+    panelBg.fillStyle(0x192134, 0.9);
+    panelBg.fillRect(W / 2 - 180, panelY, 360, 180);
+    panelBg.lineStyle(4, 0xF59E0B, 1);
+    panelBg.strokeRect(W / 2 - 180, panelY, 360, 180);
     panelBg.setAlpha(0);
 
     // 统计项
     const stats = [
-      { label: '得分', value: this._data.score.toLocaleString(), color: '#ffd700', icon: '⭐' },
-      { label: '通关时间', value: this.formatTime(this._data.timeSec), color: '#64b5f6', icon: '⏱' },
-      { label: '阵亡次数', value: `${this._data.deaths}`, color: this._data.deaths > 0 ? '#ef5350' : '#4caf50', icon: '💀' },
+      { label: '得    分', value: this._data.score.toLocaleString(), color: COLOR_GOLD },
+      { label: '通关时间', value: this.formatTime(this._data.timeSec), color: '#64B5F6' },
+      { label: '阵亡次数', value: `${this._data.deaths}`, color: this._data.deaths > 0 ? '#EF4444' : COLOR_GREEN },
     ];
 
     const statTexts: Phaser.GameObjects.Text[] = [];
     stats.forEach((s, i) => {
-      const y = panelY + 30 + i * 50;
-      const icon = this.add.text(W / 2 - 150, y, s.icon, {
-        fontSize: '20px',
-      }).setOrigin(0, 0.5).setAlpha(0);
-
-      const label = this.add.text(W / 2 - 115, y, s.label, {
-        fontFamily: 'monospace',
-        fontSize: '16px',
-        color: '#8899aa',
+      const y = panelY + 24 + i * 48;
+      const label = this.add.text(W / 2 - 150, y, s.label, {
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: '11px',
+        color: COLOR_SUB,
       }).setOrigin(0, 0.5).setAlpha(0);
 
       const value = this.add.text(W / 2 + 150, y, s.value, {
-        fontFamily: 'monospace',
-        fontSize: '22px',
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: '18px',
         color: s.color,
-        fontStyle: 'bold',
       }).setOrigin(1, 0.5).setAlpha(0);
 
-      statTexts.push(icon, label, value);
+      statTexts.push(label, value);
     });
 
     // ── 游玩风格标签 ──────────────────────────────
     const styleLabel = this.detectStyle();
-    const styleTag = this.add.text(W / 2, panelY + 175, styleLabel, {
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      color: '#a0a0b0',
-      backgroundColor: '#2a2a3e',
-      padding: { x: 14, y: 6 },
+    const styleTag = this.add.text(W / 2, panelY + 157, styleLabel, {
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '10px',
+      color: COLOR_MUTED,
+      backgroundColor: COLOR_PANEL,
+      padding: { x: 12, y: 6 },
     }).setOrigin(0.5).setAlpha(0);
 
-    // ── 操作区 ────────────────────────────────────
-    const menuY = panelY + 230;
+    // ── 操作区（Phase 3 按钮风格）─────────────────
+    const menuY = panelY + 200;
 
-    // "下一关" 按钮（仅在有关卡可解锁时显示）
+    // "下一关" 按钮（红底金框像素风）
     if (this._data.nextLevelId) {
       const nextName = LEVEL_NAMES[this._data.nextLevelId] ?? '下一关';
-      const nextBtn = this.createMenuItem(W / 2, menuY, `▶  ${nextName}`, () => {
+      const btnX = W / 2;
+      const btnY = menuY;
+
+      // 按钮背景
+      const nextBg = this.add.graphics();
+      nextBg.fillStyle(0xDC2626, 0.9);
+      nextBg.fillRect(btnX - 130, btnY - 18, 260, 36);
+      nextBg.lineStyle(4, 0xF59E0B, 1);
+      nextBg.strokeRect(btnX - 130, btnY - 18, 260, 36);
+
+      const nextBtn = this.createMenuItem(btnX, btnY, `下一关: ${nextName}`, () => {
         this._saveSys.unlockLevel(this._data.nextLevelId!);
-        this.scene.start('Level1Scene'); // 复用 Level1Scene 模板（后续 Batch 替换为 Level2Scene）
+        this.scene.start('Level1Scene');
       });
       this._menuItems.push(nextBtn);
     }
 
-    // "返回主菜单"（Batch 10: 直接跳转 MainMenuScene，跳过 BootScene 重复加载）
-    const menuBtn = this.createMenuItem(W / 2, menuY + (this._data.nextLevelId ? 44 : 0), '🏠  返回主菜单', () => {
+    // "返回主菜单" 按钮（暗底灰框）
+    const menuBtnY = menuY + (this._data.nextLevelId ? 50 : 0);
+    const menuBg = this.add.graphics();
+    menuBg.fillStyle(0x192134, 0.85);
+    menuBg.fillRect(W / 2 - 110, menuBtnY - 16, 220, 32);
+    menuBg.lineStyle(3, 0x334155, 1);
+    menuBg.strokeRect(W / 2 - 110, menuBtnY - 16, 220, 32);
+
+    const menuBtn = this.createMenuItem(W / 2, menuBtnY, '返回主菜单', () => {
       this.scene.start('MainMenuScene');
     });
     this._menuItems.push(menuBtn);
 
     // ── 入口动画序列 ──────────────────────────────
-    this.tweens.add({ targets: titleEmoji, alpha: 1, y: 55, duration: 400, ease: 'Back.easeOut', delay: 200 });
-    this.tweens.add({ targets: title, alpha: 1, duration: 500, delay: 400 });
-    this.tweens.add({ targets: subtitle, alpha: 1, duration: 400, delay: 600 });
-    this.tweens.add({ targets: panelBg, alpha: 1, duration: 400, delay: 700 });
+    this.tweens.add({ targets: title, alpha: 1, y: 50, duration: 400, ease: 'Back.easeOut', delay: 200 });
+    this.tweens.add({ targets: subtitle, alpha: 1, duration: 400, delay: 400 });
+    this.tweens.add({ targets: panelBg, alpha: 1, duration: 400, delay: 500 });
 
     statTexts.forEach((t, i) => {
       this.tweens.add({
         targets: t,
         alpha: 1,
         duration: 300,
-        delay: 800 + i * 80,
+        delay: 600 + i * 80,
         ease: 'Sine.easeOut',
       });
     });
 
-    this.tweens.add({ targets: styleTag, alpha: 1, duration: 400, delay: 1200 });
+    this.tweens.add({ targets: styleTag, alpha: 1, duration: 400, delay: 1000 });
 
     this._menuItems.forEach((item, i) => {
       this.tweens.add({
         targets: item.text,
         alpha: 1,
         duration: 400,
-        delay: 1400 + i * 200,
+        delay: 1100 + i * 200,
         ease: 'Sine.easeOut',
       });
     });
@@ -196,16 +221,15 @@ export class ResultScene extends Phaser.Scene {
     console.log(`[ResultScene] 结算 — ${this._data.levelName} | 得分:${this._data.score} 时间:${this.formatTime(this._data.timeSec)} 死亡:${this._data.deaths}`);
   }
 
-  // ── 创建菜单项 ───────────────────────────────────
+  // ── 创建菜单项（Phase 3 风格）───────────────────
   private createMenuItem(x: number, y: number, label: string, action: () => void): {
     text: Phaser.GameObjects.Text;
     action: () => void;
   } {
     const text = this.add.text(x, y, label, {
-      fontFamily: 'monospace',
-      fontSize: '18px',
-      color: '#ccccdd',
-      padding: { x: 30, y: 10 },
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '11px',
+      color: COLOR_TEXT,
     }).setOrigin(0.5).setAlpha(0).setInteractive({ useHandCursor: true });
 
     text.on('pointerover', () => {
@@ -218,17 +242,29 @@ export class ResultScene extends Phaser.Scene {
     return { text, action };
   }
 
-  // ── 高亮更新 ────────────────────────────────────
+  // ── 高亮更新（Phase 3 绿色光标色）───────────────
   private updateSelection(): void {
     this._menuItems.forEach((item, i) => {
       if (i === this._selectedIndex) {
-        item.text.setColor('#ffd700');
-        item.text.setFontStyle('bold');
+        item.text.setColor(COLOR_HIGHLIGHT);
       } else {
-        item.text.setColor('#8899aa');
-        item.text.setFontStyle('normal');
+        item.text.setColor(COLOR_TEXT);
       }
     });
+  }
+
+  // ── 像素角标（四角红色方块）─────────────────
+  private drawCornerMarkers(): void {
+    const size = 8;
+    const margin = 10;
+    const W = this.cameras.main.width;
+    const H = this.cameras.main.height;
+    const g = this.add.graphics().setDepth(100);
+    g.fillStyle(0xDC2626, 1);
+    g.fillRect(margin, margin, size, size);
+    g.fillRect(W - margin - size, margin, size, size);
+    g.fillRect(margin, H - margin - size, size, size);
+    g.fillRect(W - margin - size, H - margin - size, size, size);
   }
 
   // ── 游玩风格推断 ────────────────────────────────

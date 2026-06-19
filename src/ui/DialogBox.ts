@@ -1,7 +1,6 @@
 // ============================================================
-// DialogBox.ts — 对话框 UI（Batch 6）
-// 底部对话框，支持说话人、打字机效果、跳过/继续
-// 灰盒占位：无立绘时用彩色方块代替头像
+// DialogBox.ts — 对话框 UI（Phase 3 像素三国风格重构）
+// 底部对话框：左侧头像区 + 右侧文字区，像素边框 + 红金配色
 // ============================================================
 
 import Phaser from 'phaser';
@@ -9,19 +8,18 @@ import { EventBus } from '../core/EventBus';
 import { GameEvent } from '../types/events.types';
 import type { DialogNode } from '../types/system.types';
 
-// 对话框配色常量
-const BOX_PADDING    = 24;        // 内边距
-const BOX_HEIGHT     = 120;       // 对话框总高度
-const PORTRAIT_SIZE  = 72;        // 头像占位尺寸
-const TEXT_SPEED     = 40;        // 打字机速度（ms/字）
-const TEXT_FAST      = 8;         // 快进速度
-const LOCK_COLOR     = 0xf44336;  // 不可跳过时闪烁颜色
+// ─── Phase 3 像素配色 ────────────────────────────────
+const BOX_PADDING    = 16;
+const BOX_HEIGHT     = 110;
+const PORTRAIT_SIZE  = 56;
+const TEXT_SPEED     = 40;
+const TEXT_FAST      = 8;
 
-// 说话人颜色表
+// 说话人颜色表（Phase 3）
 const SPEAKER_COLORS: Record<string, number> = {
-  '诸葛亮': 0x4fc3f7,
-  '孟获':   0xff7043,
-  '张伯':   0xa5d6a7,
+  '诸葛亮': 0xF59E0B,    // 琥珀金
+  '孟获':   0xEF4444,    // 亮红
+  '张伯':   0x22C55E,    // 翠绿
 };
 
 // Batch 8 热修复：防止 interrupted-dialog 冻屏 + 键盘 Key 泄露
@@ -102,74 +100,75 @@ export class DialogBox {
 
     const color = SPEAKER_COLORS[dialog.speaker] ?? 0x888888;
 
-    // 背景面板
+    // 背景面板（Phase 3: 深藏青底 + 朱砂红像素边框）
     this.boxBg = this.scene.add.graphics();
-    this.boxBg.fillStyle(0x111122, 0.92);
-    this.boxBg.fillRoundedRect(BOX_PADDING, this.boxY, this.boxW, BOX_HEIGHT, 12);
-    this.boxBg.lineStyle(2, 0x334466, 0.8);
-    this.boxBg.strokeRoundedRect(BOX_PADDING, this.boxY, this.boxW, BOX_HEIGHT, 12);
+    this.boxBg.fillStyle(0x192134, 0.94);
+    this.boxBg.fillRect(BOX_PADDING, this.boxY, this.boxW, BOX_HEIGHT);
+    this.boxBg.lineStyle(4, 0xDC2626, 1);
+    this.boxBg.strokeRect(BOX_PADDING, this.boxY, this.boxW, BOX_HEIGHT);
+    // 顶部金色细线（像素装饰）
+    this.boxBg.lineStyle(2, 0xF59E0B, 0.5);
+    this.boxBg.lineBetween(BOX_PADDING + 4, this.boxY + 6, BOX_PADDING + this.boxW - 4, this.boxY + 6);
     this.container.add(this.boxBg);
 
-    // 头像占位
-    const portraitX = BOX_PADDING + 20;
+    // 头像占位（Phase 3: 深底 + 金色边框）
+    const portraitX = BOX_PADDING + 16;
     const portraitY = this.boxY + BOX_HEIGHT / 2;
     this.portrait = this.scene.add.rectangle(
       portraitX, portraitY,
       PORTRAIT_SIZE, PORTRAIT_SIZE,
-      color, 0.9,
+      0x1E293B, 1,
     );
-    this.portrait.setStrokeStyle(2, 0xffffff, 0.3);
+    this.portrait.setStrokeStyle(3, 0xF59E0B, 1);
     this.container.add(this.portrait);
 
-    // 头像标签（说话人名首字）
+    // 头像标签（说话人名首字，像素体）
     this.portraitLabel = this.scene.add.text(
       portraitX, portraitY,
       dialog.speaker[0],
       {
-        fontSize: '28px',
-        color: '#ffffff',
-        fontFamily: 'monospace',
-        fontStyle: 'bold',
+        fontSize: '24px',
+        color: '#FEF3C7',
+        fontFamily: '"Press Start 2P", monospace',
       },
     ).setOrigin(0.5);
     this.container.add(this.portraitLabel);
 
-    // 说话人
+    // 说话人（Phase 3: 琥珀金像素体）
     this.speakerText = this.scene.add.text(
-      portraitX + PORTRAIT_SIZE / 2 + 16,
-      this.boxY + 14,
+      portraitX + PORTRAIT_SIZE / 2 + 14,
+      this.boxY + 12,
       dialog.speaker,
       {
-        fontSize: '16px',
+        fontSize: '14px',
         color: `#${color.toString(16).padStart(6, '0')}`,
-        fontFamily: 'monospace',
-        fontStyle: 'bold',
+        fontFamily: '"Press Start 2P", monospace',
       },
     );
     this.container.add(this.speakerText);
 
     // 正文区域
-    const textX = portraitX + PORTRAIT_SIZE / 2 + 16;
-    const textY = this.boxY + 40;
-    const maxWidth = this.boxW - PORTRAIT_SIZE - 60;
+    const textX = portraitX + PORTRAIT_SIZE / 2 + 14;
+    const textY = this.boxY + 38;
+    const maxWidth = this.boxW - PORTRAIT_SIZE - 50;
     this.bodyText = this.scene.add.text(textX, textY, '', {
-      fontSize: '15px',
-      color: '#e8e8e8',
-      fontFamily: 'monospace',
+      fontSize: '14px',
+      color: '#FEF3C7',
+      fontFamily: '"VT323", monospace',
       wordWrap: { width: maxWidth, useAdvancedWrap: true },
       lineSpacing: 4,
     });
     this.container.add(this.bodyText);
 
-    // 跳过提示
+    // 跳过提示（Phase 3: 灰蓝小字）
     this.promptText = this.scene.add.text(
-      BOX_PADDING + this.boxW - 16,
-      this.boxY + BOX_HEIGHT - 10,
-      '(Space/J/Enter 继续)',
+      BOX_PADDING + this.boxW - 12,
+      this.boxY + BOX_HEIGHT - 8,
+      '[Space] 继续',
       {
-        fontSize: '11px',
-        color: dialog.skippable ? '#6688aa' : '#aa4444',
-        fontFamily: 'monospace',
+        fontSize: '10px',
+        color: dialog.skippable ? '#64748B' : '#EF4444',
+        fontFamily: '"Press Start 2P", monospace',
       },
     ).setOrigin(1, 1);
     this.container.add(this.promptText);
@@ -325,8 +324,8 @@ export class DialogBox {
 
   private updatePromptText(): void {
     if (!this._dialog) return;
-    const color = this._canSkip ? '#6688aa' : '#aa4444';
+    const color = this._canSkip ? '#64748B' : '#EF4444';
     this.promptText.setColor(color);
-    this.promptText.setText(this._canSkip ? '(Space/J/Enter 继续)' : '(请阅读)');
+    this.promptText.setText(this._canSkip ? '[Space] 继续' : '[请阅读]');
   }
 }
