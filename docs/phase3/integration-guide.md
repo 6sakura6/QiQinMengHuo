@@ -94,36 +94,29 @@ robocopy "docs/phase3/assets" "public/assets" /E /NFL /NDL
 
 **当前状态**: `BootScene.preload()` 为空，资源加载完全在 `Level1Scene.buildGrayboxTextures()` 中生成
 
-**目标**: 在 `BootScene` 中集中加载所有 Phase 3 外部文件，**且必须等待加载完成后才跳转场景**
+**目标**: 在 `BootScene` 中集中加载所有 Phase 3 外部文件
 
-**⚠️ 关键问题**: 当前 BootScene 用固定 1.2s tween 然后跳转 MainMenuScene（L44-54），不等待 `load.complete`。如果外部资源没加载完就跳转，纹理缓存为空 → Level1Scene 崩溃。
+**Phaser 3 时序保证**: preload() 中注册的加载任务会**自动阻塞**到 create() 调用前。
+因此 `this.load.isLoading()` 在 create() 中**永远为 false**，无需手动监听 `load.once('complete')` 或超时兜底。
 
-**操作**:
-
-修改 `src/scenes/BootScene.ts`：
+**实际代码** (已完成，见 `src/scenes/BootScene.ts`):
 
 ```typescript
 preload(): void {
-  const A = 'assets';  // 短前缀
-
-  // ── 精灵表（sprite sheets） ─────────────────────
-  this.load.spritesheet('player',         `${A}/sprites/player/player.png`,         { frameWidth: 48, frameHeight: 48 });
-  this.load.spritesheet('enemy_barbarian',`${A}/sprites/enemy/enemy_barbarian.png`, { frameWidth: 32, frameHeight: 32 });
-  this.load.spritesheet('boss_menghuo',   `${A}/sprites/boss/boss_menghuo.png`,     { frameWidth: 96, frameHeight: 96 });
-
-  // ── 肖像（单帧图片） ─────────────────────────────
+  const A = 'assets';
+  this.load.spritesheet('player',          `${A}/sprites/player/player.png`,          { frameWidth: 48, frameHeight: 48 });
+  this.load.spritesheet('enemy_barbarian', `${A}/sprites/enemy/enemy_barbarian.png`,  { frameWidth: 32, frameHeight: 32 });
+  this.load.spritesheet('boss_menghuo',    `${A}/sprites/boss/boss_menghuo.png`,      { frameWidth: 96, frameHeight: 96 });
   this.load.image('portrait_zhugeliang', `${A}/sprites/npc/zhugeliang.png`);
   this.load.image('portrait_zhangbo',    `${A}/sprites/npc/zhangbo.png`);
-
-  // ── Tileset ─────────────────────────────────────
   this.load.image('tileset_l1', `${A}/tilesets/tileset_l1.png`);
-
-  // ── UI 组件包 ────────────────────────────────────
   this.load.image('ui_kit', `${A}/ui/ui_kit.png`);
-
-  // ── 音频 ────────────────────────────────────────
-  this.load.audio('bgm_level_01',      `${A}/audio/bgm/bgm_level_01.wav`);
-  this.load.audio('bgm_level_01_boss', `${A}/audio/bgm/bgm_level_01_boss.wav`);
+  this.load.audio('bgm_main_menu',       `${A}/audio/bgm/bgm_main_menu.wav`);
+  this.load.audio('bgm_level_01',        `${A}/audio/bgm/bgm_level_01.wav`);
+  this.load.audio('bgm_level_01_boss',   `${A}/audio/bgm/bgm_level_01_boss.wav`);
+  this.load.audio('bgm_victory_fanfare', `${A}/audio/bgm/bgm_victory_fanfare.wav`);
+  this.load.audio('bgm_cutscene_calm',   `${A}/audio/bgm/bgm_cutscene_calm.wav`);
+  this.load.audio('bgm_cutscene_tense',  `${A}/audio/bgm/bgm_cutscene_tense.wav`);
   this.load.audio('sfx_shoot',         `${A}/audio/sfx/shoot.wav`);
   this.load.audio('sfx_hit',           `${A}/audio/sfx/hit.wav`);
   this.load.audio('sfx_jump',          `${A}/audio/sfx/jump.wav`);
@@ -133,45 +126,29 @@ preload(): void {
   this.load.audio('sfx_capture',       `${A}/audio/sfx/capture.wav`);
   this.load.audio('sfx_victory',       `${A}/audio/sfx/victory.wav`);
 }
-```
 
-**修改 `create()` — 加载完成守卫**:
-
-```typescript
 create(): void {
-  // ... 现有 SaveSystem 初始化 + 文本显示 ...
-
-  // ⚠️ 关键: 等待加载完成后才跳转
-  if (this.load.isLoading()) {
-    this.load.once('complete', () => {
-      this.transitionToMenu();
-    });
-    // 如果加载卡住（极端情况），5s 后强制跳转
-    this.time.delayedCall(5000, () => {
-      if (this.scene.isActive()) this.transitionToMenu();
-    });
-  } else {
-    // 没有外部资源需要加载（灰盒模式），直接走原有 tween 流程
-    this.tweens.add({
-      targets: sub,
-      alpha: 0,
-      duration: 400,
-      yoyo: true,
-      repeat: 2,
-      onComplete: () => this.transitionToMenu(),
-    });
-  }
-}
-
-private transitionToMenu(): void {
-  this.scene.start('MainMenuScene');
+  // 资源已在 preload 阶段全部加载完毕
+  // 直接播放过渡动画 → 跳转 MainMenuScene
+  this.tweens.add({
+    targets: sub, alpha: 0, duration: 400,
+    yoyo: true, repeat: 2,
+    onComplete: () => this.scene.start('MainMenuScene'),
+  });
 }
 ```
+
+**精灵表尺寸说明** (已在步骤 1 用 `crop_sprite_sheets.py` 裁齐):
+
+| Key | 裁剪后尺寸 | 帧大小 | 列×行 |
+|-----|-----------|--------|-------|
+| player | 1008×912 | 48×48 | 21×19 |
+| enemy_barbarian | 1024×928 | 32×32 | 32×29 |
+| boss_menghuo | 960×864 | 96×96 | 10×9 |
 
 **验证标准**:
-- `npm run build` 编译通过
+- `npm run build` 编译通过 ✅
 - 启动游戏，控制台无 "Missing texture key" 错误
-- 加载完成后才跳转到 MainMenuScene（不是固定 1.2s 后跳）
 - 浏览器 Network 面板可见所有资源请求 200
 
 ---
@@ -704,7 +681,9 @@ git stash pop  # 或 git checkout pre-phase3-stepN
 |--------|--------|---------|
 | 步骤 6 UI 切割 | `setCrop` 用法错误，会显示整张大图 | 改为 Python 预切片为独立 PNG |
 | 步骤 7a 地面铺设 | `setCrop` 逐 tile 产生数百 Image 对象 | 改为 `TileSprite` 平铺 |
-| 步骤 2 加载时序 | 固定 1.2s tween 不等待 `load.complete` | 添加 `load.once('complete')` 守卫 |
+| 步骤 2 加载时序 | 固定 1.2s tween 不等待 `load.complete` | v2: 添加 `load.once('complete')` 守卫 |
+| 步骤 2 加载守卫 | load.isLoading() 永远是 false，死代码 | v2.1: 移除 dead path，直接过渡（Phaser 3 自动阻塞 create） |
+| 精灵表尺寸 | 1024×943 有右/下冗余，帧边界不整除 | v2.1: crop_sprite_sheets.py 裁齐 (1008×912 / 1024×928 / 960×864) |
 | 步骤 3 动画缺口 | 漏了 FALL / CUTSCENE_LOCK 两个状态 | 补充复用方案 |
 | 灰盒纹理遗漏 | 只列了 5 种，漏了 fragment_marker / sky_bg | 补充到文件对照表 + 步骤 9 |
 | Enemy 闪烁描述 | 误称 Enemy 用 `setTint`，实际已是 alpha | 删除错误描述，确认无需改动 |

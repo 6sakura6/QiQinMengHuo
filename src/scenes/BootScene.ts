@@ -1,5 +1,6 @@
 // ============================================================
-// BootScene.ts — 启动加载场景（Batch 10：初始化系统 → 进入主菜单）
+// BootScene.ts — 启动加载场景
+// Phase 3 集成：集中加载所有外部美术/音频资源，完成后跳转主菜单
 // ============================================================
 
 import Phaser from 'phaser';
@@ -11,19 +12,56 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Batch 1：全灰盒，无外部资源需要加载
-    // Batch 3 开始这里会读 asset-manifest.json 并加载精灵/图块
+    const A = 'assets'; // 短前缀
+
+    // ── 精灵表（sprite sheets） ─────────────────────
+    this.load.spritesheet('player',          `${A}/sprites/player/player.png`,          { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('enemy_barbarian', `${A}/sprites/enemy/enemy_barbarian.png`,  { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('boss_menghuo',    `${A}/sprites/boss/boss_menghuo.png`,      { frameWidth: 96, frameHeight: 96 });
+
+    // ── 肖像（单帧图片） ─────────────────────────────
+    this.load.image('portrait_zhugeliang', `${A}/sprites/npc/zhugeliang.png`);
+    this.load.image('portrait_zhangbo',    `${A}/sprites/npc/zhangbo.png`);
+
+    // ── Tileset ─────────────────────────────────────
+    this.load.image('tileset_l1', `${A}/tilesets/tileset_l1.png`);
+
+    // ── UI 组件包 ────────────────────────────────────
+    this.load.image('ui_kit', `${A}/ui/ui_kit.png`);
+
+    // ── BGM（背景音乐，6 首） ────────────────────────
+    this.load.audio('bgm_main_menu',       `${A}/audio/bgm/bgm_main_menu.wav`);
+    this.load.audio('bgm_level_01',        `${A}/audio/bgm/bgm_level_01.wav`);
+    this.load.audio('bgm_level_01_boss',   `${A}/audio/bgm/bgm_level_01_boss.wav`);
+    this.load.audio('bgm_victory_fanfare', `${A}/audio/bgm/bgm_victory_fanfare.wav`);
+    this.load.audio('bgm_cutscene_calm',   `${A}/audio/bgm/bgm_cutscene_calm.wav`);
+    this.load.audio('bgm_cutscene_tense',  `${A}/audio/bgm/bgm_cutscene_tense.wav`);
+
+    // ── SFX（音效，8 个） ────────────────────────────
+    this.load.audio('sfx_shoot',         `${A}/audio/sfx/shoot.wav`);
+    this.load.audio('sfx_hit',           `${A}/audio/sfx/hit.wav`);
+    this.load.audio('sfx_jump',          `${A}/audio/sfx/jump.wav`);
+    this.load.audio('sfx_boss_charge',   `${A}/audio/sfx/boss_charge.wav`);
+    this.load.audio('sfx_boss_stomp',    `${A}/audio/sfx/boss_stomp.wav`);
+    this.load.audio('sfx_dialog_popup',  `${A}/audio/sfx/dialog_popup.wav`);
+    this.load.audio('sfx_capture',       `${A}/audio/sfx/capture.wav`);
+    this.load.audio('sfx_victory',       `${A}/audio/sfx/victory.wav`);
   }
 
   create(): void {
+    // Phaser 3 行为说明：
+    //   preload() 中注册的加载任务会自动阻塞到 create() 调用之前完成。
+    //   因此 create() 中 this.load.isLoading() 永远为 false，
+    //   不需要手动等待 load.once('complete') 或超时兜底。
+    //   直接播放过渡动画即可 —— 此时所有纹理、音频已就绪。
+
     const { width, height } = this.cameras.main;
 
     // ── 初始化全局单例系统 ────────────────────────
-    // SaveSystem 在首次 getInstance() 时自动从 localStorage 恢复存档
     const saveSys = SaveSystem.getInstance();
     console.log(`[BootScene] SaveSystem 就绪 — 已解锁: ${saveSys.data.unlockedLevels.join(', ') || '(无)'}`);
 
-    // 进度提示
+    // ── 标题文字 ──────────────────────────────────
     const title = this.add
       .text(width / 2, height / 2 - 20, '七擒孟获', {
         fontFamily: 'monospace',
@@ -40,7 +78,8 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // 闪烁动画（像素风 blink）
+    // ── 过渡动画 → 跳转主菜单 ────────────────────
+    // 短暂闪烁后跳转（灰盒模式亦然）
     this.tweens.add({
       targets: sub,
       alpha: 0,
@@ -48,11 +87,8 @@ export class BootScene extends Phaser.Scene {
       yoyo: true,
       repeat: 2,
       onComplete: () => {
-        // Batch 10: 改为跳转主菜单（而非直接进关卡）
         this.scene.start('MainMenuScene');
       },
     });
-
-    console.log('[BootScene] → 即将进入 MainMenuScene');
   }
 }
