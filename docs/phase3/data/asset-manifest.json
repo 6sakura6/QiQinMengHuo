@@ -1,1 +1,482 @@
-{"version": "1.0", "gameId": "qi-qin-meng-huo", "lastUpdated": "2026-06-17", "description": "《七擒孟获》资产清单 - Phase 3 第1关核心资产", "assets": {"sprites": [{"id": "player_sprite_sheet", "name": "玩家角色精灵表", "type": "sprite_sheet", "path": "assets/sprites/player/Pixel_art_sprite_sheet_for_a_H_2026-06-16T04-44-46.png", "frameWidth": 48, "frameHeight": 48, "frames": 32, "animations": {"idle": {"frameStart": 0, "frameEnd": 3, "frameRate": 6}, "run": {"frameStart": 4, "frameEnd": 9, "frameRate": 10}, "jump": {"frameStart": 10, "frameEnd": 13, "frameRate": 8}, "shoot": {"frameStart": 14, "frameEnd": 17, "frameRate": 12}, "hurt": {"frameStart": 18, "frameEnd": 19, "frameRate": 8}, "die": {"frameStart": 20, "frameEnd": 25, "frameRate": 10}}, "usedIn": ["level_01", "level_02", "level_03", "level_04", "level_05", "level_06", "level_07"], "tags": ["player", "protagonist", "han_soldier", "p0"]}, {"id": "boss_menghuo_l1_sprite_sheet", "name": "孟获骑象Boss精灵表（第1关）", "type": "sprite_sheet", "path": "assets/sprites/boss/Pixel_art_sprite_sheet_for_Bos_2026-06-16T04-45-04.png", "frameWidth": 96, "frameHeight": 96, "frames": 35, "animations": {"idle": {"frameStart": 0, "frameEnd": 3, "frameRate": 5}, "charge": {"frameStart": 4, "frameEnd": 9, "frameRate": 10}, "stomp": {"frameStart": 10, "frameEnd": 13, "frameRate": 8}, "sweep": {"frameStart": 14, "frameEnd": 17, "frameRate": 10}, "hurt": {"frameStart": 18, "frameEnd": 19, "frameRate": 8}, "fall": {"frameStart": 20, "frameEnd": 25, "frameRate": 12}, "captured": {"frameStart": 26, "frameEnd": 29, "frameRate": 6}}, "usedIn": ["level_01"], "tags": ["boss", "menghuo", "elephant", "level_01_boss", "p0"]}, {"id": "enemy_barbarian_sprite_sheet", "name": "蛮兵精灵表", "type": "sprite_sheet", "path": "assets/sprites/enemy/Pixel_art_sprite_sheet_for_Nan_2026-06-16T04-45-08.png", "frameWidth": 32, "frameHeight": 32, "frames": 18, "animations": {"patrol": {"frameStart": 0, "frameEnd": 3, "frameRate": 5}, "attack": {"frameStart": 4, "frameEnd": 9, "frameRate": 10}, "hurt": {"frameStart": 10, "frameEnd": 12, "frameRate": 8}, "death": {"frameStart": 13, "frameEnd": 17, "frameRate": 10}}, "usedIn": ["level_01", "level_02", "level_03", "level_04", "level_05"], "tags": ["enemy", "nanman_warrior", "barbarian", "p0"]}, {"id": "npc_zhuge_liang_portrait", "name": "诸葛亮肖像", "type": "portrait", "path": "assets/sprites/npc/Pixel_art_portrait_of_Zhuge_Li_2026-06-16T04-46-28.png", "frameWidth": 256, "frameHeight": 256, "frames": 1, "usedIn": ["level_01", "level_02", "level_03", "level_04", "level_05", "level_06", "level_07"], "tags": ["npc", "zhuge_liang", "portrait", "dialog", "p1"]}, {"id": "npc_zhang_bo_portrait", "name": "老兵张伯肖像", "type": "portrait", "path": "assets/sprites/npc/Pixel_art_NPC_portrait_of_vete_2026-06-16T04-47-01.png", "frameWidth": 256, "frameHeight": 256, "frames": 1, "usedIn": ["level_01", "level_02", "level_03"], "tags": ["npc", "zhang_bo", "veteran", "portrait", "dialog", "p1"]}], "tilesets": [{"id": "tileset_level01_ground", "name": "第1关地面Tileset", "type": "tileset", "path": "assets/tilesets/Pixel_art_tileset_for_Level_1__2026-06-16T04-45-43.png", "tileWidth": 32, "tileHeight": 32, "columns": 16, "totalTiles": 40, "tileTypes": {"grass": [0, 1, 2, 3], "dirt_path": [4, 5], "water": [8, 9, 10, 11], "wood_platform": [16, 17], "stone_platform": [18, 19], "decoration_bamboo": [24, 25, 26], "decoration_rocks": [27, 28], "background_mountains": [32, 33, 34, 35]}, "usedIn": ["level_01"], "tags": ["tileset", "ground", "environment", "riverside", "level_01", "p0"]}], "ui": [{"id": "ui_hud_kit", "name": "HUD组件包", "type": "ui_sprite_sheet", "path": "assets/ui/Pixel_art_UI_component_kit_for_2026-06-16T04-45-51.png", "components": {"player_hp_bar": {"x": 24, "y": 24, "w": 200, "h": 24}, "boss_hp_bar": {"x": 250, "y": 20, "w": 780, "h": 44}, "dialog_box": {"x": 80, "y": 500, "w": 1120, "h": 150}, "weapon_panel": {"x": 960, "y": 585, "w": 280, "h": 105}, "result_victory_frame": null, "result_defeat_frame": null, "next_level_button": null}, "usedIn": ["level_01", "level_02", "level_03", "level_04", "level_05", "level_06", "level_07", "main_menu", "level_select"], "tags": ["ui", "hud", "dialog", "menu", "p0"]}], "audio": {"note": "占位音频 - 数学合成, 无版权, 可安全用于开发测试。正式版建议替换为专业音效素材。", "bgm": [{"id": "bgm_main_menu", "name": "主菜单BGM (史诗肃穆)", "path": "assets/audio/bgm/bgm_main_menu.wav", "durationSec": 60, "loop": true, "usedIn": ["main_menu"], "mood": "epic_solemn"}, {"id": "bgm_level_01", "name": "第1关战斗BGM (紧张激昂)", "path": "assets/audio/bgm/bgm_level_01.wav", "durationSec": 90, "loop": true, "usedIn": ["level_01"], "mood": "action_intense"}, {"id": "bgm_level_01_boss", "name": "第1关Boss战BGM (史诗对决)", "path": "assets/audio/bgm/bgm_level_01_boss.wav", "durationSec": 60, "loop": true, "usedIn": ["level_01"], "mood": "boss_epic"}, {"id": "bgm_cutscene_tense", "name": "紧张过场BGM (戏剧张力)", "path": "assets/audio/bgm/bgm_cutscene_tense.wav", "durationSec": 30, "loop": true, "usedIn": ["cutscenes"], "mood": "dramatic_tension"}, {"id": "bgm_cutscene_calm", "name": "平静过场BGM (宁静反思)", "path": "assets/audio/bgm/bgm_cutscene_calm.wav", "durationSec": 45, "loop": true, "usedIn": ["cutscenes"], "mood": "peaceful_reflection"}, {"id": "bgm_victory_fanfare", "name": "胜利号角 (凯旋)", "path": "assets/audio/bgm/bgm_victory_fanfare.wav", "durationSec": 4, "loop": false, "usedIn": ["results"], "mood": "triumphant"}], "sfx": [{"id": "sfx_shoot", "name": "射击音效 (短促高频)", "path": "assets/audio/sfx/shoot.wav", "durationSec": 0.08, "usedIn": ["all_levels"]}, {"id": "sfx_hit", "name": "命中音效 (中频击打)", "path": "assets/audio/sfx/hit.wav", "durationSec": 0.06, "usedIn": ["all_levels"]}, {"id": "sfx_jump", "name": "跳跃音效 (上升音阶)", "path": "assets/audio/sfx/jump.wav", "durationSec": 0.12, "usedIn": ["all_levels"]}, {"id": "sfx_boss_charge", "name": "Boss冲锋音效 (低沉轰鸣)", "path": "assets/audio/sfx/boss_charge.wav", "durationSec": 1.0, "usedIn": ["level_01"]}, {"id": "sfx_boss_stomp", "name": "Boss踏地音效 (低频冲击)", "path": "assets/audio/sfx/boss_stomp.wav", "durationSec": 0.8, "usedIn": ["level_01"]}, {"id": "sfx_dialog_popup", "name": "对话弹出音效 (清脆提示)", "path": "assets/audio/sfx/dialog_popup.wav", "durationSec": 0.2, "usedIn": ["all_scenes"]}, {"id": "sfx_capture", "name": "擒获音效 (戏剧下降)", "path": "assets/audio/sfx/capture.wav", "durationSec": 1.5, "usedIn": ["level_01", "level_02", "level_03", "level_04", "level_05", "level_06"]}, {"id": "sfx_victory", "name": "胜利音效 (凯旋号角)", "path": "assets/audio/sfx/victory.wav", "durationSec": 0.7, "usedIn": ["results"]}]}}}
+{
+  "version": "1.0",
+  "gameId": "qi-qin-meng-huo",
+  "lastUpdated": "2026-06-17",
+  "description": "《七擒孟获》资产清单 - Phase 3 第1关核心资产",
+  "assets": {
+    "sprites": [
+      {
+        "id": "player_sprite_sheet",
+        "name": "玩家角色精灵表",
+        "type": "sprite_sheet",
+        "path": "assets/sprites/player/Pixel_art_sprite_sheet_for_a_H_2026-06-16T04-56-41.png",
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "frames": 32,
+        "animations": {
+          "idle": {
+            "frameStart": 0,
+            "frameEnd": 3,
+            "frameRate": 6
+          },
+          "run": {
+            "frameStart": 4,
+            "frameEnd": 9,
+            "frameRate": 10
+          },
+          "jump": {
+            "frameStart": 10,
+            "frameEnd": 13,
+            "frameRate": 8
+          },
+          "shoot": {
+            "frameStart": 14,
+            "frameEnd": 17,
+            "frameRate": 12
+          },
+          "hurt": {
+            "frameStart": 18,
+            "frameEnd": 19,
+            "frameRate": 8
+          },
+          "die": {
+            "frameStart": 20,
+            "frameEnd": 25,
+            "frameRate": 10
+          }
+        },
+        "usedIn": [
+          "level_01",
+          "level_02",
+          "level_03",
+          "level_04",
+          "level_05",
+          "level_06",
+          "level_07"
+        ],
+        "tags": [
+          "player",
+          "protagonist",
+          "han_soldier",
+          "p0"
+        ]
+      },
+      {
+        "id": "boss_menghuo_l1_sprite_sheet",
+        "name": "孟获骑象Boss精灵表（第1关）",
+        "type": "sprite_sheet",
+        "path": "assets/sprites/boss/Pixel_art_sprite_sheet_for_Bos_2026-06-16T04-56-47.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "frames": 35,
+        "animations": {
+          "idle": {
+            "frameStart": 0,
+            "frameEnd": 3,
+            "frameRate": 5
+          },
+          "charge": {
+            "frameStart": 4,
+            "frameEnd": 9,
+            "frameRate": 10
+          },
+          "stomp": {
+            "frameStart": 10,
+            "frameEnd": 13,
+            "frameRate": 8
+          },
+          "sweep": {
+            "frameStart": 14,
+            "frameEnd": 17,
+            "frameRate": 10
+          },
+          "hurt": {
+            "frameStart": 18,
+            "frameEnd": 19,
+            "frameRate": 8
+          },
+          "fall": {
+            "frameStart": 20,
+            "frameEnd": 25,
+            "frameRate": 12
+          },
+          "captured": {
+            "frameStart": 26,
+            "frameEnd": 29,
+            "frameRate": 6
+          }
+        },
+        "usedIn": [
+          "level_01"
+        ],
+        "tags": [
+          "boss",
+          "menghuo",
+          "elephant",
+          "level_01_boss",
+          "p0"
+        ]
+      },
+      {
+        "id": "enemy_barbarian_sprite_sheet",
+        "name": "蛮兵精灵表",
+        "type": "sprite_sheet",
+        "path": "assets/sprites/enemy/Pixel_art_sprite_sheet_for_Nan_2026-06-16T04-56-52.png",
+        "frameWidth": 32,
+        "frameHeight": 32,
+        "frames": 18,
+        "animations": {
+          "patrol": {
+            "frameStart": 0,
+            "frameEnd": 3,
+            "frameRate": 5
+          },
+          "attack": {
+            "frameStart": 4,
+            "frameEnd": 9,
+            "frameRate": 10
+          },
+          "hurt": {
+            "frameStart": 10,
+            "frameEnd": 12,
+            "frameRate": 8
+          },
+          "death": {
+            "frameStart": 13,
+            "frameEnd": 17,
+            "frameRate": 10
+          }
+        },
+        "usedIn": [
+          "level_01",
+          "level_02",
+          "level_03",
+          "level_04",
+          "level_05"
+        ],
+        "tags": [
+          "enemy",
+          "nanman_warrior",
+          "barbarian",
+          "p0"
+        ]
+      },
+      {
+        "id": "npc_zhuge_liang_portrait",
+        "name": "诸葛亮肖像",
+        "type": "portrait",
+        "path": "assets/sprites/npc/Pixel_art_portrait_of_Zhuge_Li_2026-06-16T04-58-01.png",
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "frames": 1,
+        "usedIn": [
+          "level_01",
+          "level_02",
+          "level_03",
+          "level_04",
+          "level_05",
+          "level_06",
+          "level_07"
+        ],
+        "tags": [
+          "npc",
+          "zhuge_liang",
+          "portrait",
+          "dialog",
+          "p1"
+        ]
+      },
+      {
+        "id": "npc_zhang_bo_portrait",
+        "name": "老兵张伯肖像",
+        "type": "portrait",
+        "path": "assets/sprites/npc/Pixel_art_NPC_portrait_of_elde_2026-06-16T04-58-35.png",
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "frames": 1,
+        "usedIn": [
+          "level_01",
+          "level_02",
+          "level_03"
+        ],
+        "tags": [
+          "npc",
+          "zhang_bo",
+          "veteran",
+          "portrait",
+          "dialog",
+          "p1"
+        ]
+      }
+    ],
+    "tilesets": [
+      {
+        "id": "tileset_level01_ground",
+        "name": "第1关地面Tileset",
+        "type": "tileset",
+        "path": "assets/tilesets/Pixel_art_tileset_for_Level_1__2026-06-16T04-57-23.png",
+        "tileWidth": 32,
+        "tileHeight": 32,
+        "columns": 16,
+        "totalTiles": 40,
+        "tileTypes": {
+          "grass": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "dirt_path": [
+            4,
+            5
+          ],
+          "water": [
+            8,
+            9,
+            10,
+            11
+          ],
+          "wood_platform": [
+            16,
+            17
+          ],
+          "stone_platform": [
+            18,
+            19
+          ],
+          "decoration_bamboo": [
+            24,
+            25,
+            26
+          ],
+          "decoration_rocks": [
+            27,
+            28
+          ],
+          "background_mountains": [
+            32,
+            33,
+            34,
+            35
+          ]
+        },
+        "usedIn": [
+          "level_01"
+        ],
+        "tags": [
+          "tileset",
+          "ground",
+          "environment",
+          "riverside",
+          "level_01",
+          "p0"
+        ]
+      }
+    ],
+    "ui": [
+      {
+        "id": "ui_hud_kit",
+        "name": "HUD组件包",
+        "type": "ui_sprite_sheet",
+        "path": "assets/ui/Pixel_art_UI_component_kit_for_2026-06-16T04-57-28.png",
+        "components": {
+          "player_hp_bar": {
+            "x": 24,
+            "y": 24,
+            "w": 200,
+            "h": 24
+          },
+          "boss_hp_bar": {
+            "x": 250,
+            "y": 20,
+            "w": 780,
+            "h": 44
+          },
+          "dialog_box": {
+            "x": 80,
+            "y": 500,
+            "w": 1120,
+            "h": 150
+          },
+          "weapon_panel": {
+            "x": 960,
+            "y": 585,
+            "w": 280,
+            "h": 105
+          },
+          "result_victory_frame": null,
+          "result_defeat_frame": null,
+          "next_level_button": null
+        },
+        "usedIn": [
+          "level_01",
+          "level_02",
+          "level_03",
+          "level_04",
+          "level_05",
+          "level_06",
+          "level_07",
+          "main_menu",
+          "level_select"
+        ],
+        "tags": [
+          "ui",
+          "hud",
+          "dialog",
+          "menu",
+          "p0"
+        ]
+      }
+    ],
+    "audio": {
+      "note": "占位音频 - 数学合成, 无版权, 可安全用于开发测试。正式版建议替换为专业音效素材。",
+      "bgm": [
+        {
+          "id": "bgm_main_menu",
+          "name": "主菜单BGM (史诗肃穆)",
+          "path": "assets/audio/bgm/bgm_main_menu.wav",
+          "durationSec": 60,
+          "loop": true,
+          "usedIn": [
+            "main_menu"
+          ],
+          "mood": "epic_solemn"
+        },
+        {
+          "id": "bgm_level_01",
+          "name": "第1关战斗BGM (紧张激昂)",
+          "path": "assets/audio/bgm/bgm_level_01.wav",
+          "durationSec": 90,
+          "loop": true,
+          "usedIn": [
+            "level_01"
+          ],
+          "mood": "action_intense"
+        },
+        {
+          "id": "bgm_level_01_boss",
+          "name": "第1关Boss战BGM (史诗对决)",
+          "path": "assets/audio/bgm/bgm_level_01_boss.wav",
+          "durationSec": 60,
+          "loop": true,
+          "usedIn": [
+            "level_01"
+          ],
+          "mood": "boss_epic"
+        },
+        {
+          "id": "bgm_cutscene_tense",
+          "name": "紧张过场BGM (戏剧张力)",
+          "path": "assets/audio/bgm/bgm_cutscene_tense.wav",
+          "durationSec": 30,
+          "loop": true,
+          "usedIn": [
+            "cutscenes"
+          ],
+          "mood": "dramatic_tension"
+        },
+        {
+          "id": "bgm_cutscene_calm",
+          "name": "平静过场BGM (宁静反思)",
+          "path": "assets/audio/bgm/bgm_cutscene_calm.wav",
+          "durationSec": 45,
+          "loop": true,
+          "usedIn": [
+            "cutscenes"
+          ],
+          "mood": "peaceful_reflection"
+        },
+        {
+          "id": "bgm_victory_fanfare",
+          "name": "胜利号角 (凯旋)",
+          "path": "assets/audio/bgm/bgm_victory_fanfare.wav",
+          "durationSec": 4,
+          "loop": false,
+          "usedIn": [
+            "results"
+          ],
+          "mood": "triumphant"
+        }
+      ],
+      "sfx": [
+        {
+          "id": "sfx_shoot",
+          "name": "射击音效 (短促高频)",
+          "path": "assets/audio/sfx/shoot.wav",
+          "durationSec": 0.08,
+          "usedIn": [
+            "all_levels"
+          ]
+        },
+        {
+          "id": "sfx_hit",
+          "name": "命中音效 (中频击打)",
+          "path": "assets/audio/sfx/hit.wav",
+          "durationSec": 0.06,
+          "usedIn": [
+            "all_levels"
+          ]
+        },
+        {
+          "id": "sfx_jump",
+          "name": "跳跃音效 (上升音阶)",
+          "path": "assets/audio/sfx/jump.wav",
+          "durationSec": 0.12,
+          "usedIn": [
+            "all_levels"
+          ]
+        },
+        {
+          "id": "sfx_boss_charge",
+          "name": "Boss冲锋音效 (低沉轰鸣)",
+          "path": "assets/audio/sfx/boss_charge.wav",
+          "durationSec": 1.0,
+          "usedIn": [
+            "level_01"
+          ]
+        },
+        {
+          "id": "sfx_boss_stomp",
+          "name": "Boss踏地音效 (低频冲击)",
+          "path": "assets/audio/sfx/boss_stomp.wav",
+          "durationSec": 0.8,
+          "usedIn": [
+            "level_01"
+          ]
+        },
+        {
+          "id": "sfx_dialog_popup",
+          "name": "对话弹出音效 (清脆提示)",
+          "path": "assets/audio/sfx/dialog_popup.wav",
+          "durationSec": 0.2,
+          "usedIn": [
+            "all_scenes"
+          ]
+        },
+        {
+          "id": "sfx_capture",
+          "name": "擒获音效 (戏剧下降)",
+          "path": "assets/audio/sfx/capture.wav",
+          "durationSec": 1.5,
+          "usedIn": [
+            "level_01",
+            "level_02",
+            "level_03",
+            "level_04",
+            "level_05",
+            "level_06"
+          ]
+        },
+        {
+          "id": "sfx_victory",
+          "name": "胜利音效 (凯旋号角)",
+          "path": "assets/audio/sfx/victory.wav",
+          "durationSec": 0.7,
+          "usedIn": [
+            "results"
+          ]
+        }
+      ]
+    }
+  }
+}

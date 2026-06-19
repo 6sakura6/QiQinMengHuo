@@ -1,0 +1,61 @@
+{
+  "version": "0.1.0",
+  "comment": "Phase 2 Batch 0 — 占位清单。Batch 3 开始逐项替换为真实资源路径。",
+  "sprites": [
+    {
+      "key": "player",
+      "path": "assets/sprites/player.png",
+      "type": "image",
+      "fallback": "rect:32x48:0x888888"
+    },
+    {
+      "key": "enemy_soldier",
+      "path": "assets/sprites/enemy_soldier.png",
+      "type": "image",
+      "fallback": "rect:32x48:0xcc4444"
+    },
+    {
+      "key": "boss_menghuo",
+      "path": "assets/sprites/boss_menghuo.png",
+      "type": "image",
+      "fallback": "rect:96x128:0xcc8844"
+    },
+    {
+      "key": "bullet",
+      "path": "assets/sprites/bullet.png",
+      "type": "image",
+      "fallback": "rect:8x8:0xffdd44"
+    }
+  ],
+  "tilesets": [
+    {
+      "key": "tileset_l1",
+      "path": "assets/tilesets/level1.png",
+      "type": "image",
+      "fallback": "rect:960x540:0x1a2a3a"
+    }
+  ],
+  "ui": [
+    {
+      "key": "hp_bar",
+      "path": "assets/ui/hp_bar.png",
+      "type": "image",
+      "fallback": "rect:120x16:0x44cc44"
+    },
+    {
+      "key": "dialog_box",
+      "path": "assets/ui/dialog_box.png",
+      "type": "image",
+      "fallback": "rect:800x120:0x111122"
+    }
+  ],
+  "audio": [],
+  "cutscenes": [
+    {
+      "key": "cutscene_l1_intro",
+      "path": "assets/cutscenes/l1_intro.png",
+      "type": "image",
+      "fallback": "rect:960x540:0x112244"
+    }
+  ]
+}

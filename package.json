@@ -1,0 +1,19 @@
+{
+  "name": "qiqinmenghuo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "《七擒孟获》横版动作游戏 — 腾讯云黑客松 · 叙事类游戏赛道",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11"
+  }
+}
