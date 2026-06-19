@@ -22,7 +22,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     default: 'arcade',
     arcade: {
       gravity: { x: 0, y: GRAVITY },
-      debug: true,           // 调试碰撞盒（验收完成后改回 false）
+      debug: false,          // 物理碰撞盒调试（开发期可改回 true）
     },
   },
   scene: [BootScene, MainMenuScene, Level1Scene, ResultScene],   // Batch 10 加入 MainMenuScene

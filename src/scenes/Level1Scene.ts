@@ -279,71 +279,426 @@ export class Level1Scene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────
-  // 灰盒贴图（程序生成，Batch 3 替换为真实精灵图）
+  // 像素三国纹理 — 程序化生成第1关全部背景/地面/装饰素材
+  // 配色参考 Phase 3 规范：翠绿 #166534、琥珀金 #F59E0B、深藏青 #0F172A
   // ─────────────────────────────────────────────────
   private buildGrayboxTextures(): void {
-    const makeRect = (
-      key: string, w: number, h: number,
-      fill: number, border?: number,
-    ) => {
-      if (this.textures.exists(key)) {
-        console.log(`[纹理] ${key} 已存在，跳过`);
-        return;
-      }
+    const tex = this.textures;
+
+    // 辅助：无边框矩形纹理
+    const genTex = (key: string, w: number, h: number, drawFn: (g: Phaser.GameObjects.Graphics) => void) => {
+      if (tex.exists(key)) { console.log(`[纹理] ${key} 已存在，跳过`); return; }
       try {
         const g = this.add.graphics();
-        g.fillStyle(fill, 1);
-        g.fillRect(0, 0, w, h);
-        if (border !== undefined) {
-          g.lineStyle(2, border, 1);
-          g.strokeRect(1, 1, w - 2, h - 2);
-        }
+        drawFn(g);
         g.generateTexture(key, w, h);
         g.destroy();
-        const ok = this.textures.exists(key);
-        console.log(`[纹理] ${key} ${w}×${h} 生成${ok ? '成功' : '失败!!'}`);
-      } catch (e) {
-        console.error(`[纹理] ${key} 生成异常:`, e);
-      }
+        console.log(`[纹理] ${key} ${w}×${h} 生成${tex.exists(key) ? '成功' : '失败!!'}`);
+      } catch (e) { console.error(`[纹理] ${key} 异常:`, e); }
     };
 
-    console.log('[纹理] 开始生成灰盒贴图...');
-    // 玩家占位：深蓝色 24×40，白色边框
-    makeRect('player_placeholder', 24, 40, 0x2255cc, 0xaaaaff);
-    // 地面/平台：深绿灰
-    makeRect('ground_tile', TILE_SIZE, TILE_SIZE, 0x2d4a3e, 0x4a7a64);
-    // 背景天空
-    makeRect('sky_bg', MAP_WIDTH, GAME_HEIGHT, 0x0a1a2a);
-    // 子弹：亮黄色 8×4
-    makeRect('bullet_placeholder', 8, 4, 0xffdd44);
-    // 敌人：暗红色 24×40，橙色边框
-    makeRect('enemy_placeholder', 24, 40, 0xaa2222, 0xff6644);
-    // Boss 占位：深紫 64×80，金框（象 + 骑手）
-    makeRect('boss_meng_huo_placeholder', 64, 80, 0x6A1B9A, 0xFFD700);
-    // 故事碎片标记：金色发光小方块 16×16（Batch 9）
-    makeRect('fragment_marker', 16, 16, 0xFFD700, 0xFFF8C0);
-    console.log('[纹理] 灰盒贴图生成完毕');
+    console.log('[纹理] 🎨 开始生成像素三国贴图...');
+
+    // ═══════════════════════════════════════
+    // 地面瓦片 32×32：泥土层 + 翠绿草皮顶 + 像素纹理
+    // ═══════════════════════════════════════
+    genTex('ground_tile', 32, 32, (g) => {
+      // 泥土填充
+      g.fillStyle(0x4A3728, 1);
+      g.fillRect(0, 0, 32, 32);
+      // 泥土颗粒纹理
+      g.fillStyle(0x3A2718, 1);
+      g.fillRect(4, 12, 3, 3); g.fillRect(18, 20, 2, 2);
+      g.fillRect(10, 26, 3, 2); g.fillRect(25, 8, 2, 3);
+      g.fillStyle(0x5A4738, 1);
+      g.fillRect(8, 8, 2, 2); g.fillRect(22, 16, 3, 3);
+      g.fillRect(14, 24, 2, 2);
+      // 草皮顶层 (3px 翠绿)
+      g.fillStyle(0x166534, 1);
+      g.fillRect(0, 0, 32, 4);
+      // 草皮高光
+      g.fillStyle(0x22C55E, 0.6);
+      g.fillRect(0, 1, 32, 1);
+      // 随机草叶尖
+      g.fillStyle(0x22C55E, 0.8);
+      g.fillRect(4, 0, 2, 1); g.fillRect(12, 0, 1, 2);
+      g.fillRect(20, 0, 2, 1); g.fillRect(28, 0, 1, 2);
+      // 底部暗边
+      g.fillStyle(0x2A1708, 0.5);
+      g.fillRect(0, 30, 32, 2);
+    });
+
+    // ═══════════════════════════════════════
+    // 木纹平台 32×16：深木色 + 年轮纹理
+    // ═══════════════════════════════════════
+    genTex('platform_wood', 32, 16, (g) => {
+      // 木板底色
+      g.fillStyle(0x8B6914, 1);
+      g.fillRect(0, 0, 32, 16);
+      // 木纹横线
+      g.fillStyle(0x7B5908, 0.8);
+      g.fillRect(0, 3, 32, 1); g.fillRect(0, 7, 32, 1);
+      g.fillRect(0, 11, 32, 1);
+      g.fillStyle(0x6B4F12, 0.6);
+      g.fillRect(0, 2, 32, 1); g.fillRect(0, 10, 32, 1);
+      // 顶边（接触面高光）
+      g.fillStyle(0xA07924, 1);
+      g.fillRect(0, 0, 32, 2);
+      // 底边暗
+      g.fillStyle(0x5A3E08, 0.7);
+      g.fillRect(0, 14, 32, 2);
+      // 侧边竖线（板缝）
+      g.fillStyle(0x6B4F12, 0.4);
+      g.fillRect(10, 2, 1, 12); g.fillRect(21, 2, 1, 12);
+    });
+
+    // ═══════════════════════════════════════
+    // 远山剪影 160×80
+    // ═══════════════════════════════════════
+    genTex('mountain_far', 160, 80, (g) => {
+      g.fillStyle(0x1A2A3A, 1);
+      // 主峰
+      g.fillRect(0, 30, 160, 50);
+      // 山峰三角形
+      for (let x = 0; x < 160; x++) {
+        const mid = 80;
+        const h = Math.max(0, 45 - Math.abs(x - mid) * 0.58);
+        g.fillStyle(0x1A2A3A, 1);
+        g.fillRect(x, Math.floor(30 - h), 1, Math.ceil(h));
+      }
+      // 小山峰 (右侧)
+      for (let x = 100; x < 160; x++) {
+        const h2 = Math.max(0, 25 - Math.abs(x - 130) * 0.85);
+        g.fillStyle(0x152535, 1);
+        g.fillRect(x, Math.floor(25 - h2), 1, Math.ceil(h2));
+      }
+    });
+
+    // ═══════════════════════════════════════
+    // 近山/丘陵 200×100
+    // ═══════════════════════════════════════
+    genTex('mountain_near', 200, 100, (g) => {
+      // 山体基底
+      g.fillStyle(0x2A3A4A, 1);
+      g.fillRect(0, 35, 200, 65);
+      // 主峰 (左侧)
+      for (let x = 0; x < 140; x++) {
+        const h = Math.max(0, 50 - Math.abs(x - 50) * 0.55);
+        g.fillRect(x, Math.floor(35 - h), 1, Math.ceil(h));
+      }
+      // 次峰 (右侧)
+      for (let x = 60; x < 200; x++) {
+        const h2 = Math.max(0, 35 - Math.abs(x - 130) * 0.5);
+        g.fillRect(x, Math.floor(30 - h2), 1, Math.ceil(h2));
+      }
+      // 山体纹理（浅色斑块模拟岩石）
+      g.fillStyle(0x3A4A5A, 0.5);
+      g.fillRect(30, 20, 40, 8); g.fillRect(100, 15, 30, 6);
+    });
+
+    // ═══════════════════════════════════════
+    // 树/竹林 48×80
+    // ═══════════════════════════════════════
+    genTex('tree_pine', 48, 80, (g) => {
+      // 树干
+      g.fillStyle(0x4A3728, 1);
+      g.fillRect(22, 40, 4, 40);
+      // 树冠层 1（底层最宽）
+      g.fillStyle(0x0F2F1F, 1);
+      g.fillRect(8, 28, 32, 14);
+      g.fillStyle(0x166534, 0.8);
+      g.fillRect(10, 30, 28, 10);
+      // 树冠层 2
+      g.fillStyle(0x0F2F1F, 1);
+      g.fillRect(12, 16, 24, 14);
+      g.fillStyle(0x166534, 0.8);
+      g.fillRect(14, 18, 20, 10);
+      // 树冠层 3（顶层最窄）
+      g.fillStyle(0x0F2F1F, 1);
+      g.fillRect(16, 4, 16, 14);
+      g.fillStyle(0x22C55E, 0.5);
+      g.fillRect(18, 6, 12, 8);
+      // 树冠尖顶
+      g.fillStyle(0x22C55E, 0.6);
+      g.fillRect(22, 0, 4, 6);
+    });
+
+    // ═══════════════════════════════════════
+    // 草丛装饰 24×12
+    // ═══════════════════════════════════════
+    genTex('deco_grass', 24, 12, (g) => {
+      g.fillStyle(0x166534, 1);
+      g.fillRect(4, 6, 3, 6);   // 草1
+      g.fillRect(10, 3, 2, 9);  // 草2（较高）
+      g.fillRect(15, 6, 3, 6);  // 草3
+      g.fillRect(20, 4, 2, 8);  // 草4
+      // 高光
+      g.fillStyle(0x22C55E, 0.7);
+      g.fillRect(5, 6, 1, 2); g.fillRect(11, 3, 1, 3);
+      g.fillRect(16, 6, 1, 2); g.fillRect(21, 4, 1, 2);
+    });
+
+    // ═══════════════════════════════════════
+    // 石块装饰 20×14
+    // ═══════════════════════════════════════
+    genTex('deco_stone', 20, 14, (g) => {
+      g.fillStyle(0x5A5A6A, 1);
+      g.fillRect(2, 4, 16, 10);
+      g.fillRect(0, 8, 20, 6);  // 底部更宽
+      // 高光面
+      g.fillStyle(0x6A6A7A, 0.6);
+      g.fillRect(3, 5, 6, 3);
+      // 暗面
+      g.fillStyle(0x3A3A4A, 0.5);
+      g.fillRect(12, 8, 6, 5);
+      // 轮廓
+      g.fillStyle(0x4A4A5A, 0.8);
+      g.fillRect(1, 8, 18, 1);
+    });
+
+    // ═══════════════════════════════════════
+    // 汉军旌旗 8×48
+    // ═══════════════════════════════════════
+    genTex('deco_flag', 8, 48, (g) => {
+      // 旗杆
+      g.fillStyle(0x8B6914, 1);
+      g.fillRect(3, 0, 2, 48);
+      // 旗帜（朱砂红）
+      g.fillStyle(0xDC2626, 1);
+      g.fillRect(0, 4, 8, 18);
+      // 旗帜暗面
+      g.fillStyle(0x991B1B, 0.5);
+      g.fillRect(0, 12, 8, 10);
+      // 金色旗边
+      g.fillStyle(0xF59E0B, 0.9);
+      g.fillRect(0, 4, 8, 1);
+      // 旗杆顶
+      g.fillStyle(0xF59E0B, 1);
+      g.fillRect(2, 0, 4, 3);
+    });
+
+    // ═══════════════════════════════════════
+    // 游戏实体（保持不变）
+    // ═══════════════════════════════════════
+    genTex('player_placeholder', 24, 40, (g) => {
+      g.fillStyle(0x2255cc, 1); g.fillRect(0, 0, 24, 40);
+      g.lineStyle(2, 0xaaaaff, 1); g.strokeRect(1, 1, 22, 38);
+    });
+    genTex('enemy_placeholder', 24, 40, (g) => {
+      g.fillStyle(0xaa2222, 1); g.fillRect(0, 0, 24, 40);
+      g.lineStyle(2, 0xff6644, 1); g.strokeRect(1, 1, 22, 38);
+    });
+    genTex('boss_meng_huo_placeholder', 64, 80, (g) => {
+      g.fillStyle(0x6A1B9A, 1); g.fillRect(0, 0, 64, 80);
+      g.lineStyle(2, 0xFFD700, 1); g.strokeRect(1, 1, 62, 78);
+    });
+    genTex('bullet_placeholder', 8, 4, (g) => {
+      g.fillStyle(0xffdd44, 1); g.fillRect(0, 0, 8, 4);
+    });
+    genTex('fragment_marker', 16, 16, (g) => {
+      g.fillStyle(0xFFD700, 1); g.fillRect(0, 0, 16, 16);
+      g.lineStyle(2, 0xFFF8C0, 1); g.strokeRect(1, 1, 14, 14);
+    });
+
+    console.log('[纹理] ✅ 像素三国贴图全部生成完毕');
   }
 
   // ─────────────────────────────────────────────────
-  // 构建灰盒地图（地面 + 平台）
+  // 构建像素三国背景地图 — 六层场景 + 游戏层
+  //
+  //  深度分层：
+  //    -50  天空渐变
+  //    -40  远山剪影
+  //    -30  近山丘陵
+  //    -25  河流
+  //    -20  树丛
+  //    -5   战场地面填充
+  //      1   地面/平台（物理碰撞层）
+  //      2~3 装饰物
   // ─────────────────────────────────────────────────
   private buildMap(): void {
-    // 背景
-    this.add.image(0, 0, 'sky_bg').setOrigin(0, 0).setDepth(-10);
+    this.drawSky();
+    this.drawFarMountains();
+    this.drawNearMountains();
+    this.drawRiver();
+    this.drawTrees();
+    this.drawGroundFill();
+    this.buildGroundAndPlatforms();
+    this.scatterDecorations();
+    // this.drawDevGrid();     // 开发辅助网格（已关闭）
+    this.buildWorldBounds();
+  }
 
-    // 网格辅助线（开发期，关闭时注释掉即可）
-    this.drawDevGrid();
+  // ── 天空：深蓝→暖橙黄昏渐变（水平条带，像素风）─────────
+  private drawSky(): void {
+    const g = this.add.graphics().setDepth(-50);
+    const H = GAME_HEIGHT;
+    const W = MAP_WIDTH;
 
-    // 地面（静态物理组）
+    // 天空色带（从上到下，15 段过渡）
+    const bands = [
+      { y: 0,    h: 40,  c: 0x0B132B },
+      { y: 40,   h: 40,  c: 0x0E1835 },
+      { y: 80,   h: 40,  c: 0x111D3F },
+      { y: 120,  h: 40,  c: 0x162649 },
+      { y: 160,  h: 40,  c: 0x1A3053 },
+      { y: 200,  h: 40,  c: 0x1E3A5D },
+      { y: 240,  h: 35,  c: 0x234468 },
+      { y: 275,  h: 30,  c: 0x2B4E70 },
+      { y: 305,  h: 30,  c: 0x355A78 },
+      { y: 335,  h: 30,  c: 0x426880 },
+      { y: 365,  h: 30,  c: 0x4A6A7A },
+      { y: 395,  h: 30,  c: 0x5A5A5A },
+      { y: 425,  h: 30,  c: 0x6A4A3A },
+      { y: 455,  h: 40,  c: 0x7A4A2A },
+      { y: 495,  h: 45,  c: 0x8A4A2A },
+    ];
+
+    for (const b of bands) {
+      g.fillStyle(b.c, 1);
+      g.fillRect(0, b.y, W, b.h);
+    }
+
+    // 地平线暖金光晕（超宽渐变带）
+    g.fillStyle(0xF59E0B, 0.04);
+    g.fillRect(0, H - 60, W, 60);
+    g.fillStyle(0xEA580C, 0.03);
+    g.fillRect(0, H - 40, W, 40);
+  }
+
+  // ── 远山剪影（视差 0.2）────────────────────────────
+  private drawFarMountains(): void {
+    const cfg = [
+      { x: -40,  y: GAME_HEIGHT - 105, sx: 1.6, sy: 1.1 },
+      { x: 300,  y: GAME_HEIGHT - 100, sx: 1.4, sy: 1.0 },
+      { x: 700,  y: GAME_HEIGHT - 108, sx: 1.8, sy: 1.15 },
+      { x: 1100, y: GAME_HEIGHT - 95,  sx: 1.3, sy: 0.95 },
+      { x: 1500, y: GAME_HEIGHT - 102, sx: 1.5, sy: 1.05 },
+      { x: 1900, y: GAME_HEIGHT - 98,  sx: 1.7, sy: 1.1 },
+      { x: 2300, y: GAME_HEIGHT - 106, sx: 1.4, sy: 1.0 },
+      { x: 2700, y: GAME_HEIGHT - 100, sx: 1.6, sy: 1.08 },
+      { x: 3100, y: GAME_HEIGHT - 95,  sx: 1.5, sy: 0.98 },
+      { x: 3500, y: GAME_HEIGHT - 103, sx: 1.8, sy: 1.12 },
+      { x: 3900, y: GAME_HEIGHT - 99,  sx: 1.4, sy: 1.0 },
+      { x: 4300, y: GAME_HEIGHT - 105, sx: 1.6, sy: 1.05 },
+      { x: 4700, y: GAME_HEIGHT - 97,  sx: 1.3, sy: 0.95 },
+    ];
+
+    for (const m of cfg) {
+      const img = this.add.image(m.x, m.y, 'mountain_far')
+        .setOrigin(0, 1)
+        .setScale(m.sx, m.sy)
+        .setAlpha(0.7)
+        .setDepth(-40)
+        .setScrollFactor(0.2);
+      // 远山色调：统一冷蓝灰
+      img.setTint(0x1A2A3A);
+    }
+  }
+
+  // ── 近山丘陵（视差 0.5）────────────────────────────
+  private drawNearMountains(): void {
+    const cfg = [
+      { x: -50,  y: GAME_HEIGHT - 85, sx: 1.4, sy: 1.0 },
+      { x: 450,  y: GAME_HEIGHT - 78, sx: 1.2, sy: 0.9 },
+      { x: 1000, y: GAME_HEIGHT - 90, sx: 1.6, sy: 1.1 },
+      { x: 1600, y: GAME_HEIGHT - 82, sx: 1.3, sy: 0.95 },
+      { x: 2200, y: GAME_HEIGHT - 88, sx: 1.5, sy: 1.05 },
+      { x: 2800, y: GAME_HEIGHT - 80, sx: 1.4, sy: 0.92 },
+      { x: 3400, y: GAME_HEIGHT - 86, sx: 1.7, sy: 1.08 },
+      { x: 4000, y: GAME_HEIGHT - 83, sx: 1.3, sy: 0.95 },
+      { x: 4600, y: GAME_HEIGHT - 87, sx: 1.5, sy: 1.0 },
+    ];
+
+    for (const m of cfg) {
+      const img = this.add.image(m.x, m.y, 'mountain_near')
+        .setOrigin(0, 1)
+        .setScale(m.sx, m.sy)
+        .setAlpha(0.8)
+        .setDepth(-30)
+        .setScrollFactor(0.5);
+      img.setTint(0x2A3A4A);
+    }
+  }
+
+  // ── 河流（中景蓝色水带）────────────────────────────
+  private drawRiver(): void {
+    const riverY = GAME_HEIGHT - 70;
+    const g = this.add.graphics().setDepth(-25).setAlpha(0.5);
+
+    // 河流主体
+    g.fillStyle(0x1A3A5A, 0.8);
+    g.fillRect(0, riverY, MAP_WIDTH, 18);
+
+    // 水面波光（像素短线）
+    g.fillStyle(0x2A5A8A, 0.6);
+    const segments = Math.floor(MAP_WIDTH / 48);
+    for (let i = 0; i < segments; i++) {
+      const sx = i * 48 + ((i % 3) * 12);
+      g.fillRect(sx, riverY + 4, 24, 2);
+      g.fillRect(sx + 6, riverY + 10, 16, 2);
+    }
+
+    // 河岸边缘（深色过渡）
+    g.fillStyle(0x0F2A1A, 0.4);
+    g.fillRect(0, riverY - 2, MAP_WIDTH, 3);
+    g.fillRect(0, riverY + 16, MAP_WIDTH, 4);
+  }
+
+  // ── 树丛散落（战场两侧 + 远景装饰）─────────────────
+  private drawTrees(): void {
+    const trees = [
+      // 远景树丛（较小，更透明）
+      { x: 80,   y: GAME_HEIGHT - 95,  s: 0.5, a: 0.4, d: -20, scr: 0.3 },
+      { x: 350,  y: GAME_HEIGHT - 90,  s: 0.55, a: 0.4, d: -20, scr: 0.3 },
+      { x: 650,  y: GAME_HEIGHT - 98,  s: 0.45, a: 0.35, d: -20, scr: 0.3 },
+      { x: 1350, y: GAME_HEIGHT - 85,  s: 0.5, a: 0.4, d: -20, scr: 0.3 },
+      { x: 1850, y: GAME_HEIGHT - 92,  s: 0.55, a: 0.35, d: -20, scr: 0.3 },
+      { x: 2550, y: GAME_HEIGHT - 88,  s: 0.5, a: 0.4, d: -20, scr: 0.3 },
+      { x: 3150, y: GAME_HEIGHT - 95,  s: 0.45, a: 0.35, d: -20, scr: 0.3 },
+      { x: 3850, y: GAME_HEIGHT - 90,  s: 0.55, a: 0.4, d: -20, scr: 0.3 },
+      { x: 4550, y: GAME_HEIGHT - 93,  s: 0.5, a: 0.35, d: -20, scr: 0.3 },
+
+      // 近景树丛（较大，地面层装饰）
+      { x: 40,   y: GAME_HEIGHT - 55,  s: 0.65, a: 0.55, d: 2, scr: 0.8 },
+      { x: 250,  y: GAME_HEIGHT - 50,  s: 0.6, a: 0.5, d: 2, scr: 0.8 },
+      { x: 900,  y: GAME_HEIGHT - 58,  s: 0.7, a: 0.55, d: 2, scr: 0.8 },
+      { x: 1700, y: GAME_HEIGHT - 52,  s: 0.6, a: 0.5, d: 2, scr: 0.8 },
+      { x: 2400, y: GAME_HEIGHT - 56,  s: 0.65, a: 0.55, d: 2, scr: 0.8 },
+      { x: 3300, y: GAME_HEIGHT - 50,  s: 0.7, a: 0.5, d: 2, scr: 0.8 },
+      { x: 4200, y: GAME_HEIGHT - 54,  s: 0.65, a: 0.55, d: 2, scr: 0.8 },
+      { x: 4900, y: GAME_HEIGHT - 53,  s: 0.6, a: 0.5, d: 2, scr: 0.8 },
+    ];
+
+    for (const t of trees) {
+      this.add.image(t.x, t.y, 'tree_pine')
+        .setOrigin(0.5, 1)
+        .setScale(t.s)
+        .setAlpha(t.a)
+        .setDepth(t.d)
+        .setScrollFactor(t.scr);
+    }
+  }
+
+  // ── 战场地面填充（泥土色，在游戏地面之下）──────────
+  private drawGroundFill(): void {
+    const g = this.add.graphics().setDepth(-5);
+    // 深泥底色铺在河流之下与地面之间的区域
+    g.fillStyle(0x3A2A1A, 1);
+    g.fillRect(0, GAME_HEIGHT - 55, MAP_WIDTH, 60);
+    // 地面泥土纹理带
+    g.fillStyle(0x4A3728, 0.6);
+    g.fillRect(0, GAME_HEIGHT - 45, MAP_WIDTH, 15);
+  }
+
+  // ── 游戏层：地面 + 平台（物理碰撞）─────────────────
+  private buildGroundAndPlatforms(): void {
     this.platforms = this.physics.add.staticGroup();
     const tilesX = Math.ceil(MAP_WIDTH / TILE_SIZE) + 1;
-
-    // 🔧 所有地图 tile depth 锁定 ≤ 5，确保 UI 层 (depth ≥ 100) 永远在上
     const MAP_DEPTH = 1;
 
+    // ── 地面（3 行草皮泥土砖）───────────────────────
     for (let i = 0; i < tilesX; i++) {
-      // 地面：铺满 3 行
       for (let row = 0; row < 3; row++) {
         const tile = this.platforms.create(
           i * TILE_SIZE + TILE_SIZE / 2,
@@ -354,20 +709,78 @@ export class Level1Scene extends Phaser.Scene {
       }
     }
 
-    // 跳台
+    // ── 木纹跳台 ────────────────────────────────────
     for (const cfg of PLATFORM_CONFIGS) {
+      // 木平台用半高 tile（16px 高，居中对齐到 cfg.y）
+      const platTileH = 16;
+      const platY = cfg.y - platTileH / 2;
       const tileCount = Math.ceil(cfg.w / TILE_SIZE);
+
       for (let i = 0; i < tileCount; i++) {
         const tile = this.platforms.create(
           cfg.x + i * TILE_SIZE + TILE_SIZE / 2,
           cfg.y,
-          'ground_tile',
+          'platform_wood',
         );
         tile.setDepth(MAP_DEPTH);
+        // 修正碰撞体高度为 16px
+        const body = tile.body as Phaser.Physics.Arcade.StaticBody;
+        body.setSize(TILE_SIZE, platTileH);
+        body.setOffset(0, -platTileH / 2);
       }
     }
+  }
 
-    // 左右隐形边界墙（防止玩家走出世界）
+  // ── 战场散落装饰（草丛、石块、旗帜）───────────────
+  private scatterDecorations(): void {
+    const decos = [
+      // 草丛（地面附近，坐标略高于地面）
+      { t: 'deco_grass', x: 60,   y: GAME_HEIGHT - 52, d: 3 },
+      { t: 'deco_grass', x: 180,  y: GAME_HEIGHT - 48, d: 3 },
+      { t: 'deco_grass', x: 320,  y: GAME_HEIGHT - 54, d: 3 },
+      { t: 'deco_grass', x: 550,  y: GAME_HEIGHT - 50, d: 3 },
+      { t: 'deco_grass', x: 720,  y: GAME_HEIGHT - 53, d: 3 },
+      { t: 'deco_grass', x: 1050, y: GAME_HEIGHT - 47, d: 3 },
+      { t: 'deco_grass', x: 1300, y: GAME_HEIGHT - 52, d: 3 },
+      { t: 'deco_grass', x: 1580, y: GAME_HEIGHT - 49, d: 3 },
+      { t: 'deco_grass', x: 1950, y: GAME_HEIGHT - 55, d: 3 },
+      { t: 'deco_grass', x: 2200, y: GAME_HEIGHT - 50, d: 3 },
+      { t: 'deco_grass', x: 2600, y: GAME_HEIGHT - 48, d: 3 },
+      { t: 'deco_grass', x: 2900, y: GAME_HEIGHT - 53, d: 3 },
+      { t: 'deco_grass', x: 3500, y: GAME_HEIGHT - 51, d: 3 },
+      { t: 'deco_grass', x: 4000, y: GAME_HEIGHT - 49, d: 3 },
+      { t: 'deco_grass', x: 4400, y: GAME_HEIGHT - 54, d: 3 },
+      { t: 'deco_grass', x: 4800, y: GAME_HEIGHT - 50, d: 3 },
+
+      // 石块
+      { t: 'deco_stone', x: 130,  y: GAME_HEIGHT - 46, d: 2 },
+      { t: 'deco_stone', x: 440,  y: GAME_HEIGHT - 48, d: 2 },
+      { t: 'deco_stone', x: 880,  y: GAME_HEIGHT - 44, d: 2 },
+      { t: 'deco_stone', x: 1400, y: GAME_HEIGHT - 47, d: 2 },
+      { t: 'deco_stone', x: 2100, y: GAME_HEIGHT - 45, d: 2 },
+      { t: 'deco_stone', x: 2700, y: GAME_HEIGHT - 48, d: 2 },
+      { t: 'deco_stone', x: 3600, y: GAME_HEIGHT - 46, d: 2 },
+      { t: 'deco_stone', x: 4300, y: GAME_HEIGHT - 44, d: 2 },
+
+      // 汉军旗帜
+      { t: 'deco_flag', x: 100,  y: GAME_HEIGHT - 80, d: 3 },
+      { t: 'deco_flag', x: 600,  y: GAME_HEIGHT - 82, d: 3 },
+      { t: 'deco_flag', x: 1600, y: GAME_HEIGHT - 78, d: 3 },
+      { t: 'deco_flag', x: 2500, y: GAME_HEIGHT - 84, d: 3 },
+      { t: 'deco_flag', x: 3800, y: GAME_HEIGHT - 80, d: 3 },
+      { t: 'deco_flag', x: 4700, y: GAME_HEIGHT - 79, d: 3 },
+    ];
+
+    for (const d of decos) {
+      this.add.image(d.x, d.y, d.t)
+        .setOrigin(0.5, 1)
+        .setDepth(d.d);
+    }
+  }
+
+  // ── 世界边界 ──────────────────────────────────────
+  private buildWorldBounds(): void {
+    // 左右隐形边界墙
     const wallL = this.physics.add.staticImage(-16, GAME_HEIGHT / 2, 'ground_tile');
     const wallR = this.physics.add.staticImage(MAP_WIDTH + 16, GAME_HEIGHT / 2, 'ground_tile');
     wallL.setVisible(false);
@@ -377,7 +790,6 @@ export class Level1Scene extends Phaser.Scene {
     this.platforms.add(wallL);
     this.platforms.add(wallR);
 
-    // 世界边界
     this.physics.world.setBounds(0, -GAME_HEIGHT, MAP_WIDTH, GAME_HEIGHT * 3);
   }
 
