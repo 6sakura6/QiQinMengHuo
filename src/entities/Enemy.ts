@@ -52,7 +52,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     y: number,
     config?: Partial<EnemyConfig>,
   ) {
-    super(scene, x, y, 'enemy_placeholder');
+    super(scene, x, y, 'enemy_idle_0');
     scene.add.existing(this as unknown as Phaser.GameObjects.GameObject);
     scene.physics.add.existing(this as unknown as Phaser.GameObjects.GameObject);
 
@@ -68,6 +68,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     body.setMaxVelocityX(this._cfg.speed * CHASE_SPEED_MUL);
     body.setCollideWorldBounds(true);  // 不走出世界边界
     this.setDepth(8);
+
+    // 动画由 Scene.spawnEnemies() 创建后统一启动
 
     this.bus.emit(GameEvent.ENEMY_SPAWNED, {
       enemyType: this._cfg.type,
@@ -127,10 +129,21 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     switch (this._state) {
       case EnemyState.PATROL:
         this.doPatrol(body);
+        this.playAnimSafe('enemy_walk');
         break;
       case EnemyState.CHASE:
         this.doChase(body, playerX);
+        this.playAnimSafe('enemy_chase');
         break;
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  // 安全播放动画
+  // ─────────────────────────────────────────────────
+  private playAnimSafe(key: string): void {
+    if (this.anims.exists(key) && (!this.anims.currentAnim || this.anims.currentAnim.key !== key)) {
+      this.anims.play(key);
     }
   }
 
@@ -187,6 +200,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     } else {
       this._state    = EnemyState.HURT;
       this._hurtTimer = HURT_FLASH_MS;
+      this.playAnimSafe('enemy_hurt');
 
       // 击退
       const body = this.body as Phaser.Physics.Arcade.Body;
@@ -200,6 +214,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private die(): void {
     this._state = EnemyState.DEATH;
     this._deathTimer = DEATH_FADE_MS;
+
+    this.playAnimSafe('enemy_death');
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setVelocity(0, -120);  // 轻微上跳再落下

@@ -138,6 +138,7 @@ export class Level1Scene extends Phaser.Scene {
     this.events.on('shutdown', this.shutdown, this);
 
     this.buildGrayboxTextures();
+    this.ensureAnimationsReady();  // 🔧 显式保证: 动画必须在实体创建前就绪
     this.buildMap();
     this.spawnPlayer();
     this.setupWeaponSystem();
@@ -287,17 +288,14 @@ export class Level1Scene extends Phaser.Scene {
 
     // 辅助：无边框矩形纹理
     const genTex = (key: string, w: number, h: number, drawFn: (g: Phaser.GameObjects.Graphics) => void) => {
-      if (tex.exists(key)) { console.log(`[纹理] ${key} 已存在，跳过`); return; }
+      if (tex.exists(key)) return;
       try {
         const g = this.add.graphics();
         drawFn(g);
         g.generateTexture(key, w, h);
         g.destroy();
-        console.log(`[纹理] ${key} ${w}×${h} 生成${tex.exists(key) ? '成功' : '失败!!'}`);
       } catch (e) { console.error(`[纹理] ${key} 异常:`, e); }
     };
-
-    console.log('[纹理] 🎨 开始生成像素三国贴图...');
 
     // ═══════════════════════════════════════
     // 地面瓦片 32×32：泥土层 + 翠绿草皮顶 + 像素纹理
@@ -478,18 +476,66 @@ export class Level1Scene extends Phaser.Scene {
     });
 
     // ═══════════════════════════════════════
-    // 游戏实体（保持不变）
+    // 游戏实体：逐帧动画纹理（30fps 精灵动画）
     // ═══════════════════════════════════════
-    genTex('player_placeholder', 24, 40, (g) => { this.drawHanSoldier(g); });
-    genTex('enemy_placeholder', 24, 40, (g) => { this.drawBarbarianWarrior(g); });
-    genTex('boss_meng_huo_placeholder', 64, 80, (g) => { this.drawMengHuoOnElephant(g); });
+    this.buildPlayerFrames(genTex);
+    this.buildEnemyFrames(genTex);
+    this.buildBossFrames(genTex);
     genTex('bullet_placeholder', 12, 6, (g) => { this.drawCrossbowBolt(g); });
     genTex('fragment_marker', 16, 16, (g) => {
       g.fillStyle(0xFFD700, 1); g.fillRect(0, 0, 16, 16);
       g.lineStyle(2, 0xFFF8C0, 1); g.strokeRect(1, 1, 14, 14);
     });
 
-    console.log('[纹理] ✅ 像素三国贴图全部生成完毕');
+    // 注册所有逐帧动画
+    this.createAllAnimations();
+  }
+
+  // ═══════════════════════════════════════════════
+  // 注册全部 Phaser 动画（30fps 像素艺术帧率）
+  // ═══════════════════════════════════════════════
+  private createAllAnimations(): void {
+    const makeAnim = (key: string, prefix: string, count: number, rate: number, repeat = -1) => {
+      if (this.anims.exists(key)) { this.anims.remove(key); }
+      const frames = Array.from({ length: count }, (_, i) => ({ key: `${prefix}_${i}` }));
+      this.anims.create({ key, frames, frameRate: rate, repeat });
+    };
+
+    // ── 玩家动画 (30fps ÷ 2~4f 每帧 = 8~15fps 精灵帧率) ──
+    makeAnim('player_idle',  'player_idle',  4, 8);
+    makeAnim('player_run',   'player_run',   6, 12);
+    makeAnim('player_jump',  'player_jump',  2, 8, 0);
+    makeAnim('player_fall',  'player_fall',  2, 8, 0);
+    makeAnim('player_shoot', 'player_shoot', 3, 15, 0);
+    makeAnim('player_hurt',  'player_hurt',  2, 10, 0);
+    makeAnim('player_death', 'player_death', 4, 8, 0);
+
+    // ── 蛮兵动画 ──
+    makeAnim('enemy_idle',  'enemy_idle',  2, 6);
+    makeAnim('enemy_walk',  'enemy_walk',  4, 10);
+    makeAnim('enemy_chase', 'enemy_chase', 4, 12);
+    makeAnim('enemy_hurt',  'enemy_hurt',  2, 10, 0);
+    makeAnim('enemy_death', 'enemy_death', 3, 8, 0);
+
+    // ── Boss 动画 ──
+    makeAnim('boss_idle',     'boss_idle',     4, 7);
+    makeAnim('boss_walk',     'boss_walk',     4, 8);
+    makeAnim('boss_charge',   'boss_charge',   4, 10);
+    makeAnim('boss_stomp',    'boss_stomp',    4, 10);
+    makeAnim('boss_swipe',    'boss_swipe',    4, 12);
+    makeAnim('boss_hurt',     'boss_hurt',     3, 10, 0);
+    makeAnim('boss_defeated', 'boss_defeated', 3, 8, 0);
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 动画就绪保证 — 在任何实体构造前调用
+  //   解决 Phaser 3.80 scene.restart() / HMR 后动画丢失问题
+  // ═══════════════════════════════════════════════════
+  private ensureAnimationsReady(): void {
+    const required = ['player_idle', 'enemy_idle', 'boss_idle'];
+    if (required.some(k => !this.anims.exists(k))) {
+      this.createAllAnimations();
+    }
   }
 
   // ─────────────────────────────────────────────────
@@ -788,6 +834,8 @@ export class Level1Scene extends Phaser.Scene {
   private spawnPlayer(): void {
     this.player = new Player(this, 120, GROUND_Y - 60);
     this.inputMgr = new InputManager(this);
+    // 🎬 动画已由 buildGrayboxTextures() → createAllAnimations() 注册
+    this.player.play('player_idle');
   }
 
   // ─────────────────────────────────────────────────
@@ -818,6 +866,8 @@ export class Level1Scene extends Phaser.Scene {
     for (const s of spawns) {
       const enemy = new Enemy(this, s.x, s.y);
       this.enemyGroup.add(enemy);
+      // 🎬 动画已注册，构造后启动
+      enemy.play('enemy_idle');
     }
 
     this._totalEnemies = spawns.length;
@@ -1438,254 +1488,360 @@ export class Level1Scene extends Phaser.Scene {
     }
   }
 
+  // ═══════════════════════════════════════════════════
+  // 玩家帧生成器：汉军士卒 23 帧 | idle×4 run×6 jump×2 fall×2 shoot×3 hurt×2 death×4
+  // ═══════════════════════════════════════════════════
+  private buildPlayerFrames(genTex: (key: string, w: number, h: number, fn: (g: Phaser.GameObjects.Graphics) => void) => void): void {
+    const W = 24, H = 40;
+    // idle: 呼吸微动（身体上下 1px）
+    for (let i = 0; i < 4; i++) {
+      const oy = [0, -1, 0, 1][i];
+      genTex(`player_idle_${i}`, W, H, (g) => this.drawHanSoldierAnim(g, 'idle', oy, 0, 0, 0));
+    }
+    // run: 6帧腿步循环 + 身体弹跳
+    for (let i = 0; i < 6; i++) {
+      const oy = [0, -1, 0, 1, -1, 0][i];
+      const ll = [2, 0, -2, -2, 0, 2][i];  // 左腿偏移
+      const rl = [-2, 0, 2, 2, 0, -2][i];  // 右腿偏移
+      genTex(`player_run_${i}`, W, H, (g) => this.drawHanSoldierAnim(g, 'run', oy, ll, rl, 0));
+    }
+    // jump: 2帧（蓄力下蹲 → 腾空伸展）
+    genTex('player_jump_0', W, H, (g) => this.drawHanSoldierAnim(g, 'jump', 2, 0, 0, 0));   // crouch
+    genTex('player_jump_1', W, H, (g) => this.drawHanSoldierAnim(g, 'jump', -1, -1, 1, 1));  // extend
+    // fall: 2帧（空中下落 → 着地预备）
+    genTex('player_fall_0', W, H, (g) => this.drawHanSoldierAnim(g, 'fall', -1, 0, 0, 1));
+    genTex('player_fall_1', W, H, (g) => this.drawHanSoldierAnim(g, 'fall', 1, 1, 1, -1));
+    // shoot: 3帧（瞄准 → 击发后座 → 复位）
+    genTex('player_shoot_0', W, H, (g) => this.drawHanSoldierAnim(g, 'shoot', 0, 0, 0, 0));
+    genTex('player_shoot_1', W, H, (g) => this.drawHanSoldierAnim(g, 'shoot', 0, 0, 0, 1));  // recoil back 1px
+    genTex('player_shoot_2', W, H, (g) => this.drawHanSoldierAnim(g, 'shoot', 0, 0, 0, -1)); // recover forward
+    // hurt: 2帧（左趔趄 → 右趔趄）
+    genTex('player_hurt_0', W, H, (g) => this.drawHanSoldierAnim(g, 'hurt', 0, -2, 0, 0));
+    genTex('player_hurt_1', W, H, (g) => this.drawHanSoldierAnim(g, 'hurt', 0, 2, 0, 0));
+    // death: 4帧（命中 → 蜷缩 → 倒地 → 消逝）
+    genTex('player_death_0', W, H, (g) => this.drawHanSoldierAnim(g, 'death', 0, 0, 0, 0));
+    genTex('player_death_1', W, H, (g) => this.drawHanSoldierAnim(g, 'death', 3, 1, 1, 0));
+    genTex('player_death_2', W, H, (g) => this.drawHanSoldierAnim(g, 'death', 8, -2, -2, 0));
+    genTex('player_death_3', W, H, (g) => this.drawHanSoldierAnim(g, 'death', 12, -4, -4, 0));
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 蛮兵帧生成器：15 帧 | idle×2 walk×4 chase×4 hurt×2 death×3
+  // ═══════════════════════════════════════════════════
+  private buildEnemyFrames(genTex: (key: string, w: number, h: number, fn: (g: Phaser.GameObjects.Graphics) => void) => void): void {
+    const W = 24, H = 40;
+    // idle: 2帧呼吸
+    for (let i = 0; i < 2; i++) {
+      const oy = [0, -1][i];
+      genTex(`enemy_idle_${i}`, W, H, (g) => this.drawBarbarianAnim(g, 'idle', oy, 0, 0, 0));
+    }
+    // walk: 4帧巡逻
+    for (let i = 0; i < 4; i++) {
+      const oy = [0, -1, 0, 1][i];
+      const ll = [2, 0, -2, -2][i];
+      const rl = [-2, 0, 2, 2][i];
+      genTex(`enemy_walk_${i}`, W, H, (g) => this.drawBarbarianAnim(g, 'walk', oy, ll, rl, 0));
+    }
+    // chase: 4帧追击（步幅更大）
+    for (let i = 0; i < 4; i++) {
+      const oy = [0, -1, 0, 1][i];
+      const ll = [3, 0, -3, -3][i];
+      const rl = [-3, 0, 3, 3][i];
+      genTex(`enemy_chase_${i}`, W, H, (g) => this.drawBarbarianAnim(g, 'chase', oy, ll, rl, 0));
+    }
+    // hurt: 2帧
+    genTex('enemy_hurt_0', W, H, (g) => this.drawBarbarianAnim(g, 'hurt', 0, -2, 0, 0));
+    genTex('enemy_hurt_1', W, H, (g) => this.drawBarbarianAnim(g, 'hurt', 0, 2, 0, 0));
+    // death: 3帧
+    genTex('enemy_death_0', W, H, (g) => this.drawBarbarianAnim(g, 'death', 0, 0, 0, 0));
+    genTex('enemy_death_1', W, H, (g) => this.drawBarbarianAnim(g, 'death', 4, 1, 1, 0));
+    genTex('enemy_death_2', W, H, (g) => this.drawBarbarianAnim(g, 'death', 6, -2, -2, 0));
+  }
+
+  // ═══════════════════════════════════════════════════
+  // Boss 帧生成器：26 帧 | idle×4 walk×4 charge×4 stomp×4 swipe×4 hurt×3 defeated×3
+  // ═══════════════════════════════════════════════════
+  private buildBossFrames(genTex: (key: string, w: number, h: number, fn: (g: Phaser.GameObjects.Graphics) => void) => void): void {
+    const W = 64, H = 80;
+    // idle: 4帧巨象摇摆
+    for (let i = 0; i < 4; i++) {
+      const oy = [0, -1, 0, 1][i];
+      genTex(`boss_idle_${i}`, W, H, (g) => this.drawBossAnim(g, 'idle', oy, 0));
+    }
+    // walk: 4帧行走
+    for (let i = 0; i < 4; i++) {
+      const oy = [0, -1, 0, 1][i];
+      genTex(`boss_walk_${i}`, W, H, (g) => this.drawBossAnim(g, 'walk', oy, i));
+    }
+    // charge: 4帧冲锋（低头前倾 + 尘土）
+    for (let i = 0; i < 4; i++) {
+      const lean = [0, 1, 2, 1][i];
+      genTex(`boss_charge_${i}`, W, H, (g) => this.drawBossAnim(g, 'charge', -2, lean));
+    }
+    // stomp: 4帧踏地（抬前腿 → 重踏）
+    for (let i = 0; i < 4; i++) {
+      const lift = [0, -4, -2, 2][i];
+      genTex(`boss_stomp_${i}`, W, H, (g) => this.drawBossAnim(g, 'stomp', lift, 0));
+    }
+    // swipe: 4帧横扫（象鼻摆动）
+    for (let i = 0; i < 4; i++) {
+      const sw = [-2, 0, 2, 0][i];
+      genTex(`boss_swipe_${i}`, W, H, (g) => this.drawBossAnim(g, 'swipe', 0, sw));
+    }
+    // hurt: 3帧
+    genTex('boss_hurt_0', W, H, (g) => this.drawBossAnim(g, 'hurt', 0, 0));
+    genTex('boss_hurt_1', W, H, (g) => this.drawBossAnim(g, 'hurt', 2, 0));
+    genTex('boss_hurt_2', W, H, (g) => this.drawBossAnim(g, 'hurt', 0, 0));
+    // defeated: 3帧
+    genTex('boss_defeated_0', W, H, (g) => this.drawBossAnim(g, 'defeated', 0, 0));
+    genTex('boss_defeated_1', W, H, (g) => this.drawBossAnim(g, 'defeated', 5, 0));
+    genTex('boss_defeated_2', W, H, (g) => this.drawBossAnim(g, 'defeated', 10, 0));
+  }
+
   // ═══════════════════════════════════════════════════════════
   // 像素三国角色 — 汉军士卒 (24×40)
   // 配色：铁灰盔 0x6B7280 / 红缨 0xDC2626 / 汉军蓝甲 0x3B5998
   // ═══════════════════════════════════════════════════════════
   private drawHanSoldier(g: Phaser.GameObjects.Graphics): void {
+    this.drawHanSoldierAnim(g, 'idle', 0, 0, 0, 0);
+  }
+  private drawHanSoldierAnim(g: Phaser.GameObjects.Graphics, anim: string, by: number, ll: number, rl: number, rx: number): void {
     const C = { HELM: 0x6B7280, HHL: 0x9CA3AF, HSHD: 0x4B5563, CREST: 0xDC2626, CSHD: 0xB91C1C,
                 SKIN: 0xF5D0A9, EYE: 0x1A1A1A, ARMOR: 0x3B5998, AHL: 0x5B79B8, ASHD: 0x2B4988,
                 SASH: 0xDC2626, LEG: 0x1F2937, BOOT: 0x78350F, BHL: 0x92400E };
-
-    // ── 铁盔 (iron helmet dome + brim) ──
-    g.fillStyle(C.HELM, 1);       g.fillRect(7, 0, 10, 7);    // dome
-    g.fillStyle(C.HHL, 1);        g.fillRect(9, 1, 2, 3);     // dome highlight
-    g.fillStyle(C.HSHD, 1);       g.fillRect(7, 5, 10, 2);    // dome base shadow
-    g.fillStyle(C.HELM, 1);       g.fillRect(5, 7, 14, 2);    // brim
-    g.fillStyle(C.HHL, 1);        g.fillRect(6, 7, 12, 1);    // brim highlight
-
-    // ── 红缨 (red crest plume) ──
-    g.fillStyle(C.CREST, 1);      g.fillRect(11, 0, 2, 9);
-    g.fillStyle(C.CSHD, 1);       g.fillRect(12, 4, 1, 5);
-
-    // ── 面部 (face under helmet) ──
-    g.fillStyle(C.SKIN, 1);       g.fillRect(9, 9, 6, 4);
-    g.fillStyle(C.EYE, 1);        g.fillRect(10, 10, 2, 1);   // left eye
-    g.fillStyle(C.EYE, 1);        g.fillRect(13, 10, 2, 1);   // right eye
-
-    // ── 护颈 (gorget neck guard) ──
-    g.fillStyle(C.HELM, 1);       g.fillRect(6, 13, 12, 3);
-    g.fillStyle(C.HHL, 1);        g.fillRect(8, 13, 8, 1);
-
-    // ── 鳞甲 (blue scale armor chest) ──
-    g.fillStyle(C.ARMOR, 1);      g.fillRect(4, 16, 16, 11);
-    g.fillStyle(C.AHL, 1);        g.fillRect(10, 17, 4, 8);   // center highlight
-    g.fillStyle(C.AHL, 1);        g.fillRect(4, 16, 4, 4);    // left shoulder guard
-    g.fillStyle(C.AHL, 1);        g.fillRect(16, 16, 4, 4);   // right shoulder guard
-    // scale pattern lines
-    g.fillStyle(C.ASHD, 1);       g.fillRect(5, 19, 14, 1);
-    g.fillStyle(C.ASHD, 1);       g.fillRect(5, 22, 14, 1);
-    g.fillStyle(C.ASHD, 1);       g.fillRect(5, 25, 14, 1);
-
-    // ── 朱红腰封 (red sash belt) ──
-    g.fillStyle(C.SASH, 1);       g.fillRect(4, 27, 16, 3);
-    g.fillStyle(C.CSHD, 1);       g.fillRect(4, 29, 16, 1);
-
-    // ── 裤腿 (dark pants) ──
-    g.fillStyle(C.LEG, 1);        g.fillRect(5, 30, 6, 6);
-    g.fillStyle(C.LEG, 1);        g.fillRect(13, 30, 6, 6);
-
-    // ── 战靴 (brown boots) ──
-    g.fillStyle(C.BOOT, 1);       g.fillRect(4, 36, 7, 4);
-    g.fillStyle(C.BOOT, 1);       g.fillRect(13, 36, 7, 4);
-    g.fillStyle(C.BHL, 1);        g.fillRect(4, 36, 7, 1);    // boot top highlight
-    g.fillStyle(C.BHL, 1);        g.fillRect(13, 36, 7, 1);
-
-    // ── 右手持弩 (crossbow, right side) ──
     const BOW = { WOOD: 0x78350F, WHL: 0x92400E, METAL: 0x9CA3AF, MHL: 0xC0C7D0,
                   BOLT: 0xD4A574, TIP: 0x9CA3AF, FLETCH: 0xDC2626 };
-    // 弩臂 (stock, horizontal wooden body)
-    g.fillStyle(BOW.WOOD, 1);     g.fillRect(18, 21, 8, 3);
-    g.fillStyle(BOW.WHL, 1);      g.fillRect(18, 21, 8, 1);
-    // 弓弧 (bow limbs, vertical above & below stock)
-    g.fillStyle(BOW.METAL, 1);    g.fillRect(22, 16, 2, 5);    // upper limb
-    g.fillStyle(BOW.METAL, 1);    g.fillRect(22, 24, 2, 5);    // lower limb
-    g.fillStyle(BOW.MHL, 1);      g.fillRect(22, 18, 2, 1);    // limb highlight
-    // 弩弦 (bowstring)
-    g.fillStyle(0xE5E7EB, 1);     g.fillRect(22, 21, 1, 3);
-    // 待发弩箭 (bolt nocked on stock)
-    g.fillStyle(BOW.BOLT, 1);     g.fillRect(17, 20, 7, 1);    // shaft
-    g.fillStyle(BOW.TIP, 1);      g.fillRect(14, 20, 3, 1);    // arrowhead
-    g.fillStyle(BOW.FLETCH, 1);   g.fillRect(21, 19, 1, 3);    // fletching
-    // 弩机 (trigger mechanism)
-    g.fillStyle(BOW.METAL, 1);    g.fillRect(19, 24, 2, 2);
-      g.fillStyle(BOW.MHL, 1);      g.fillRect(19, 24, 2, 1);
+
+    // ── 铁盔 (不动) ──
+    g.fillStyle(C.HELM, 1);       g.fillRect(7, 0, 10, 7);
+    g.fillStyle(C.HHL, 1);        g.fillRect(9, 1, 2, 3);
+    g.fillStyle(C.HSHD, 1);       g.fillRect(7, 5, 10, 2);
+    g.fillStyle(C.HELM, 1);       g.fillRect(5, 7, 14, 2);
+    g.fillStyle(C.HHL, 1);        g.fillRect(6, 7, 12, 1);
+    // 红缨
+    g.fillStyle(C.CREST, 1);      g.fillRect(11, 0, 2, 9);
+    g.fillStyle(C.CSHD, 1);       g.fillRect(12, 4, 1, 5);
+    // 面部
+    g.fillStyle(C.SKIN, 1);       g.fillRect(9, 9, 6, 4);
+    g.fillStyle(C.EYE, 1);        g.fillRect(10, 10, 2, 1);
+    g.fillStyle(C.EYE, 1);        g.fillRect(13, 10, 2, 1);
+    // 护颈
+    g.fillStyle(C.HELM, 1);       g.fillRect(6, 13 + by, 12, 3);
+    g.fillStyle(C.HHL, 1);        g.fillRect(8, 13 + by, 8, 1);
+
+    // ── 鳞甲 (身体随 by 偏移) ──
+    g.fillStyle(C.ARMOR, 1);      g.fillRect(4, 16 + by, 16, 11);
+    g.fillStyle(C.AHL, 1);        g.fillRect(10, 17 + by, 4, 8);
+    g.fillStyle(C.AHL, 1);        g.fillRect(4, 16 + by, 4, 4);
+    g.fillStyle(C.AHL, 1);        g.fillRect(16, 16 + by, 4, 4);
+    g.fillStyle(C.ASHD, 1);       g.fillRect(5, 19 + by, 14, 1);
+    g.fillStyle(C.ASHD, 1);       g.fillRect(5, 22 + by, 14, 1);
+    g.fillStyle(C.ASHD, 1);       g.fillRect(5, 25 + by, 14, 1);
+    // 腰封
+    g.fillStyle(C.SASH, 1);       g.fillRect(4, 27 + by, 16, 3);
+    g.fillStyle(C.CSHD, 1);       g.fillRect(4, 29 + by, 16, 1);
+
+    // ── 裤腿 (anim 参数偏移) ──
+    const lx = 5 + ll; const rxLeg = 13 + rl;
+    g.fillStyle(C.LEG, 1);        g.fillRect(lx, 30 + by, 6, 6);
+    g.fillStyle(C.LEG, 1);        g.fillRect(rxLeg, 30 + by, 6, 6);
+    // 战靴
+    const lxBoot = 4 + ll; const rxBoot = 13 + rl;
+    g.fillStyle(C.BOOT, 1);       g.fillRect(lxBoot, 36 + by, 7, 4);
+    g.fillStyle(C.BOOT, 1);       g.fillRect(rxBoot, 36 + by, 7, 4);
+    g.fillStyle(C.BHL, 1);        g.fillRect(lxBoot, 36 + by, 7, 1);
+    g.fillStyle(C.BHL, 1);        g.fillRect(rxBoot, 36 + by, 7, 1);
+
+    // ── 弩 (recoil 偏移) ──
+    const bx = 18 + rx;
+    g.fillStyle(BOW.WOOD, 1);     g.fillRect(bx, 21 + by, 8, 3);
+    g.fillStyle(BOW.WHL, 1);      g.fillRect(bx, 21 + by, 8, 1);
+    g.fillStyle(BOW.METAL, 1);    g.fillRect(bx + 4, 16 + by, 2, 5);
+    g.fillStyle(BOW.METAL, 1);    g.fillRect(bx + 4, 24 + by, 2, 5);
+    g.fillStyle(BOW.MHL, 1);      g.fillRect(bx + 4, 18 + by, 2, 1);
+    g.fillStyle(0xE5E7EB, 1);     g.fillRect(bx + 4, 21 + by, 1, 3);
+    // 待发弩箭
+    const sx = 17 + rx;
+    g.fillStyle(BOW.BOLT, 1);     g.fillRect(sx, 20 + by, 7, 1);
+    g.fillStyle(BOW.TIP, 1);      g.fillRect(sx - 3, 20 + by, 3, 1);
+    g.fillStyle(BOW.FLETCH, 1);   g.fillRect(sx + 4, 19 + by, 1, 3);
+    // 弩机
+    g.fillStyle(BOW.METAL, 1);    g.fillRect(bx + 1, 24 + by, 2, 2);
+    g.fillStyle(BOW.MHL, 1);      g.fillRect(bx + 1, 24 + by, 2, 1);
+
+    // ── 死亡态：用暗色覆盖下半身表示倒地 ──
+    if (anim === 'death' && by > 2) {
+      g.fillStyle(0x0F172A, 0.7);
+      g.fillRect(0, Math.max(0, 6 + by), 24, 34);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 像素三国角色 — 蛮兵 (24×40)
-  // 配色：狂发棕 0x451A03 / 深肤 0xC4956A / 朱砂战纹 0xDC2626
-  //      兽皮甲 0x78350F / 骨饰 0xF5F5DC / 皮毛裙 0x6B4226
+  // 像素三国角色 — 蛮兵 (24×40) [动画版]
   // ═══════════════════════════════════════════════════════════
   private drawBarbarianWarrior(g: Phaser.GameObjects.Graphics): void {
+    this.drawBarbarianAnim(g, 'idle', 0, 0, 0, 0);
+  }
+  private drawBarbarianAnim(g: Phaser.GameObjects.Graphics, _anim: string, by: number, ll: number, rl: number, _rx: number): void {
     const C = { HAIR: 0x451A03, HHL: 0x5A2A08, SKIN: 0xC4956A, SSHD: 0xB0855A,
                 WARP: 0xDC2626, EYE: 0xDC2626, BONE: 0xF5F5DC, BNSD: 0xD5D5BC,
                 LTHR: 0x78350F, LTHL: 0x92400E, FUR: 0x6B4226, FHL: 0x7B5236,
                 LEG: 0x5A3216, FEET: 0x9A755A };
 
-    // ── 狂发 (wild spiky hair) ──
-    g.fillStyle(C.HAIR, 1);       g.fillRect(6, 0, 12, 6);    // main mass
-    g.fillStyle(C.HAIR, 1);       g.fillRect(4, 1, 3, 2);     // left tuft
-    g.fillStyle(C.HAIR, 1);       g.fillRect(17, 1, 3, 3);    // right tuft
-    g.fillStyle(C.HAIR, 1);       g.fillRect(7, 0, 2, 2);     // left spike
-    g.fillStyle(C.HAIR, 1);       g.fillRect(15, 0, 2, 1);    // right spike
-    g.fillStyle(C.HHL, 1);        g.fillRect(9, 1, 2, 2);     // highlight
+    // ── 狂发 ──
+    g.fillStyle(C.HAIR, 1);       g.fillRect(6, 0, 12, 6);
+    g.fillStyle(C.HAIR, 1);       g.fillRect(4, 1, 3, 2);
+    g.fillStyle(C.HAIR, 1);       g.fillRect(17, 1, 3, 3);
+    g.fillStyle(C.HAIR, 1);       g.fillRect(7, 0, 2, 2);
+    g.fillStyle(C.HAIR, 1);       g.fillRect(15, 0, 2, 1);
+    g.fillStyle(C.HHL, 1);        g.fillRect(9, 1, 2, 2);
     g.fillStyle(C.HHL, 1);        g.fillRect(14, 2, 2, 2);
-
-    // ── 面部 (dark skin + war paint) ──
+    // 面部
     g.fillStyle(C.SKIN, 1);       g.fillRect(8, 6, 8, 6);
-    g.fillStyle(C.BNSD, 1);       g.fillRect(9, 8, 2, 1);     // eye white (left)
-    g.fillStyle(C.BNSD, 1);       g.fillRect(13, 8, 2, 1);    // eye white (right)
-    g.fillStyle(C.EYE, 1);        g.fillRect(9, 8, 2, 1);     // fierce red eye
+    g.fillStyle(C.BNSD, 1);       g.fillRect(9, 8, 2, 1);
+    g.fillStyle(C.BNSD, 1);       g.fillRect(13, 8, 2, 1);
+    g.fillStyle(C.EYE, 1);        g.fillRect(9, 8, 2, 1);
     g.fillStyle(C.EYE, 1);        g.fillRect(13, 8, 2, 1);
-    // 朱砂战纹 (horizontal + vertical war stripes)
     g.fillStyle(C.WARP, 1);       g.fillRect(7, 7, 10, 1);
     g.fillStyle(C.WARP, 1);       g.fillRect(11, 6, 1, 9);
-
-    // ── 骨饰项链 (bone necklace) ──
+    // 骨饰项链
     g.fillStyle(C.BONE, 1);       g.fillRect(8, 13, 2, 2);
     g.fillStyle(C.BONE, 1);       g.fillRect(11, 13, 2, 2);
     g.fillStyle(C.BONE, 1);       g.fillRect(14, 13, 2, 2);
 
-    // ── 皮革甲 (leather vest / bare chest) ──
-    g.fillStyle(C.LTHR, 1);       g.fillRect(5, 15, 14, 7);
-    g.fillStyle(C.LTHL, 1);       g.fillRect(9, 16, 6, 4);    // chest highlight
-    // bare arms
-    g.fillStyle(C.SKIN, 1);       g.fillRect(3, 15, 3, 7);
-    g.fillStyle(C.SKIN, 1);       g.fillRect(18, 15, 3, 7);
-    g.fillStyle(C.SSHD, 1);       g.fillRect(4, 19, 2, 2);    // arm shadow
+    // ── 皮革甲 + 身体 (by 偏移) ──
+    g.fillStyle(C.LTHR, 1);       g.fillRect(5, 15 + by, 14, 7);
+    g.fillStyle(C.LTHL, 1);       g.fillRect(9, 16 + by, 6, 4);
+    g.fillStyle(C.SKIN, 1);       g.fillRect(3, 15 + by, 3, 7);
+    g.fillStyle(C.SKIN, 1);       g.fillRect(18, 15 + by, 3, 7);
+    g.fillStyle(C.SSHD, 1);       g.fillRect(4, 19 + by, 2, 2);
+    // 兽皮裙
+    g.fillStyle(C.FUR, 1);        g.fillRect(5, 22 + by, 14, 5);
+    g.fillStyle(C.FHL, 1);        g.fillRect(6, 22 + by, 4, 2);
+    g.fillStyle(C.FHL, 1);        g.fillRect(12, 22 + by, 5, 2);
+    g.fillStyle(C.LEG, 1);        g.fillRect(5, 26 + by, 3, 1);
+    g.fillStyle(C.LEG, 1);        g.fillRect(10, 26 + by, 4, 1);
+    g.fillStyle(C.LEG, 1);        g.fillRect(16, 26 + by, 3, 1);
 
-    // ── 兽皮裙 (fur skirt with jagged bottom) ──
-    g.fillStyle(C.FUR, 1);        g.fillRect(5, 22, 14, 5);
-    g.fillStyle(C.FHL, 1);        g.fillRect(6, 22, 4, 2);    // fur tufts
-    g.fillStyle(C.FHL, 1);        g.fillRect(12, 22, 5, 2);
-    // jagged hem
-    g.fillStyle(C.LEG, 1);        g.fillRect(5, 26, 3, 1);
-    g.fillStyle(C.LEG, 1);        g.fillRect(10, 26, 4, 1);
-    g.fillStyle(C.LEG, 1);        g.fillRect(16, 26, 3, 1);
+    // ── 绑腿 (ll/rl 偏移) ──
+    const lx = 6 + ll; const rx = 13 + rl;
+    g.fillStyle(C.LEG, 1);        g.fillRect(lx, 27 + by, 5, 7);
+    g.fillStyle(C.LEG, 1);        g.fillRect(rx, 27 + by, 5, 7);
+    g.fillStyle(C.FHL, 1);        g.fillRect(lx, 28 + by, 5, 1);
+    g.fillStyle(C.FHL, 1);        g.fillRect(lx, 31 + by, 5, 1);
+    g.fillStyle(C.FHL, 1);        g.fillRect(rx, 28 + by, 5, 1);
+    g.fillStyle(C.FHL, 1);        g.fillRect(rx, 31 + by, 5, 1);
+    // 赤足
+    const lf = 5 + ll; const rf = 13 + rl;
+    g.fillStyle(C.FEET, 1);       g.fillRect(lf, 34 + by, 6, 6);
+    g.fillStyle(C.FEET, 1);       g.fillRect(rf, 34 + by, 6, 6);
+    g.fillStyle(C.SKIN, 1);       g.fillRect(lf + 1, 35 + by, 4, 3);
+    g.fillStyle(C.SKIN, 1);       g.fillRect(rf + 1, 35 + by, 4, 3);
 
-    // ── 绑腿 (wrap leggings) ──
-    g.fillStyle(C.LEG, 1);        g.fillRect(6, 27, 5, 7);
-    g.fillStyle(C.LEG, 1);        g.fillRect(13, 27, 5, 7);
-    g.fillStyle(C.FHL, 1);        g.fillRect(6, 28, 5, 1);    // wrap stripes
-    g.fillStyle(C.FHL, 1);        g.fillRect(6, 31, 5, 1);
-    g.fillStyle(C.FHL, 1);        g.fillRect(13, 28, 5, 1);
-    g.fillStyle(C.FHL, 1);        g.fillRect(13, 31, 5, 1);
-
-    // ── 赤足 (bare feet) ──
-    g.fillStyle(C.FEET, 1);       g.fillRect(5, 34, 6, 6);
-    g.fillStyle(C.FEET, 1);       g.fillRect(13, 34, 6, 6);
-    g.fillStyle(C.SKIN, 1);       g.fillRect(6, 35, 4, 3);    // foot highlight
-    g.fillStyle(C.SKIN, 1);       g.fillRect(14, 35, 4, 3);
+    // ── 死亡淡出 ──
+    if (_anim === 'death' && by > 2) {
+      g.fillStyle(0x0F172A, 0.7);
+      g.fillRect(0, Math.max(0, 10 + by), 24, 30);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 像素三国角色 — 骑象孟获 Boss (64×80)
-  // 上半：南蛮王孟获 (铜盔 0xB45309 + 红羽 + 皮甲 + 怒目)
-  // 下半：南中战象 (灰皮 0x787878 + 象牙 0xF5F5DC + 朱鞍 0xDC2626)
+  // 像素三国角色 — 骑象孟获 Boss (64×80) [动画版]
   // ═══════════════════════════════════════════════════════════
   private drawMengHuoOnElephant(g: Phaser.GameObjects.Graphics): void {
+    this.drawBossAnim(g, 'idle', 0, 0);
+  }
+  private drawBossAnim(g: Phaser.GameObjects.Graphics, anim: string, liftY: number, extra: number): void {
     const C = { BRNZ: 0xB45309, BHL: 0xCC5A14, BSHD: 0x93420A, FEATH: 0xDC2626, FSHD: 0xB91C1C,
                 SKIN: 0xC4956A, DBEARD: 0x451A03, EYE: 0xDC2626, EYEW: 0xF5F5DC,
                 ARMR: 0x78350F, AHL: 0x92400E, SADL: 0xDC2626, GOLD: 0xF59E0B,
                 ELG: 0x787878, ELHL: 0x969696, ELSHD: 0x585858, IVORY: 0xF5F5DC, IVSD: 0xE5E5CC,
                 FOOT: 0xD1D5DB, EYE_B: 0x1A1A1A };
 
-    // ═══════════ 上半：南蛮王孟获 ═══════════
-    // ── 铜盔 (bronze helmet dome) ──
-    g.fillStyle(C.BRNZ, 1);       g.fillRect(22, 0, 20, 8);
-    g.fillStyle(C.BHL, 1);        g.fillRect(24, 1, 4, 4);
-    g.fillStyle(C.BHL, 1);        g.fillRect(38, 1, 2, 3);
-    g.fillStyle(C.BSHD, 1);       g.fillRect(22, 6, 20, 2);
+    const ly = liftY;  // 整体升降（stomp 用）
+    const lean = anim === 'charge' ? extra : 0;  // 冲锋前倾
 
-    // ── 红羽冠 (red feather plume) ──
-    g.fillStyle(C.FEATH, 1);      g.fillRect(30, 0, 4, 14);
-    g.fillStyle(C.FSHD, 1);       g.fillRect(33, 5, 1, 9);
-    g.fillStyle(C.FEATH, 1);      g.fillRect(28, 1, 2, 3);    // side feather
-    g.fillStyle(C.FEATH, 1);      g.fillRect(35, 2, 3, 2);
+    // ═════ 上半：南蛮王孟获 ═════
+    g.fillStyle(C.BRNZ, 1);       g.fillRect(22 + lean, ly, 20, 8);
+    g.fillStyle(C.BHL, 1);        g.fillRect(24 + lean, 1 + ly, 4, 4);
+    g.fillStyle(C.BHL, 1);        g.fillRect(38 + lean, 1 + ly, 2, 3);
+    g.fillStyle(C.BSHD, 1);       g.fillRect(22 + lean, 6 + ly, 20, 2);
+    // 红羽冠
+    g.fillStyle(C.FEATH, 1);      g.fillRect(30 + lean, ly, 4, 14);
+    g.fillStyle(C.FSHD, 1);       g.fillRect(33 + lean, 5 + ly, 1, 9);
+    g.fillStyle(C.FEATH, 1);      g.fillRect(28 + lean, 1 + ly, 2, 3);
+    g.fillStyle(C.FEATH, 1);      g.fillRect(35 + lean, 2 + ly, 3, 2);
+    // 面庞
+    g.fillStyle(C.SKIN, 1);       g.fillRect(23 + lean, 8 + ly, 16, 8);
+    g.fillStyle(C.DBEARD, 1);     g.fillRect(25 + lean, 7 + ly, 5, 2);
+    g.fillStyle(C.DBEARD, 1);     g.fillRect(33 + lean, 7 + ly, 5, 2);
+    g.fillStyle(C.EYEW, 1);       g.fillRect(26 + lean, 10 + ly, 3, 2);
+    g.fillStyle(C.EYEW, 1);       g.fillRect(34 + lean, 10 + ly, 3, 2);
+    g.fillStyle(C.EYE, 1);        g.fillRect(26 + lean, 10 + ly, 3, 1);
+    g.fillStyle(C.EYE, 1);        g.fillRect(34 + lean, 10 + ly, 3, 1);
+    g.fillStyle(C.SKIN, 1);       g.fillRect(29 + lean, 13 + ly, 2, 2);
+    g.fillStyle(C.DBEARD, 1);     g.fillRect(27 + lean, 16 + ly, 9, 3);
+    // 皮甲
+    g.fillStyle(C.ARMR, 1);       g.fillRect(20 + lean, 19 + ly, 22, 14);
+    g.fillStyle(C.AHL, 1);        g.fillRect(26 + lean, 20 + ly, 10, 5);
+    g.fillStyle(C.AHL, 1);        g.fillRect(26 + lean, 26 + ly, 10, 2);
+    g.fillStyle(C.BRNZ, 1);       g.fillRect(18 + lean, 23 + ly, 4, 3);
+    g.fillStyle(C.BRNZ, 1);       g.fillRect(40 + lean, 23 + ly, 4, 3);
+    // 朱红马鞍
+    g.fillStyle(C.SADL, 1);       g.fillRect(14, 33 + ly, 34, 7);
+    g.fillStyle(C.GOLD, 1);       g.fillRect(14, 33 + ly, 34, 1);
+    g.fillStyle(C.GOLD, 1);       g.fillRect(14, 39 + ly, 34, 1);
+    g.fillStyle(C.FSHD, 1);       g.fillRect(14, 36 + ly, 34, 2);
 
-    // ── 怒目面庞 (fierce face) ──
-    g.fillStyle(C.SKIN, 1);       g.fillRect(23, 8, 16, 8);
-    // eyebrows (thick dark)
-    g.fillStyle(C.DBEARD, 1);     g.fillRect(25, 7, 5, 2);
-    g.fillStyle(C.DBEARD, 1);     g.fillRect(33, 7, 5, 2);
-    // fierce red eyes
-    g.fillStyle(C.EYEW, 1);       g.fillRect(26, 10, 3, 2);
-    g.fillStyle(C.EYEW, 1);       g.fillRect(34, 10, 3, 2);
-    g.fillStyle(C.EYE, 1);        g.fillRect(26, 10, 3, 1);
-    g.fillStyle(C.EYE, 1);        g.fillRect(34, 10, 3, 1);
-    // nose / mouth
-    g.fillStyle(C.SKIN, 1);       g.fillRect(29, 13, 2, 2);
-    g.fillStyle(C.DBEARD, 1);     g.fillRect(27, 16, 9, 3);   // beard
+    // ═════ 下半：南中战象 ═════
+    const elY = ly;  // 象体同步升降
+    // 象头
+    g.fillStyle(C.ELG, 1);        g.fillRect(32, 40 + elY, 30, 14);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(34, 41 + elY, 6, 7);
+    g.fillStyle(C.EYE_B, 1);      g.fillRect(46, 42 + elY, 4, 3);
+    g.fillStyle(C.EYEW, 1);       g.fillRect(47, 42 + elY, 2, 1);
+    g.fillStyle(C.ELG, 1);        g.fillRect(60, 41 + elY, 4, 10);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(61, 42 + elY, 2, 3);
+    // 象牙
+    g.fillStyle(C.IVORY, 1);      g.fillRect(24, 46 + elY, 16, 4);
+    g.fillStyle(C.IVORY, 1);      g.fillRect(22, 44 + elY, 6, 3);
+    g.fillStyle(C.IVSD, 1);       g.fillRect(24, 49 + elY, 16, 1);
+    // 象鼻 (swipe 时 extra 控制鼻尖摆动)
+    const trunkX = 42 + (anim === 'swipe' ? extra : 0);
+    g.fillStyle(C.ELG, 1);        g.fillRect(trunkX, 52 + elY, 14, 5);
+    g.fillStyle(C.ELG, 1);        g.fillRect(trunkX + 6, 56 + elY, 10, 7);
+    g.fillStyle(C.ELG, 1);        g.fillRect(trunkX + 11, 62 + elY, 6, 8);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(trunkX + 2, 53 + elY, 4, 2);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(trunkX + 8, 57 + elY, 3, 4);
+    // 象身
+    g.fillStyle(C.ELG, 1);        g.fillRect(8, 43 + elY, 28, 20);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(10, 46 + elY, 18, 8);
+    g.fillStyle(C.ELSHD, 1);      g.fillRect(10, 58 + elY, 24, 4);
+    g.fillStyle(C.GOLD, 1);       g.fillRect(12, 44 + elY, 3, 3);
+    g.fillStyle(C.GOLD, 1);       g.fillRect(22, 44 + elY, 3, 3);
+    g.fillStyle(C.GOLD, 1);       g.fillRect(12, 54 + elY, 3, 3);
+    g.fillStyle(C.GOLD, 1);       g.fillRect(22, 54 + elY, 3, 3);
+    // 四柱象腿
+    g.fillStyle(C.ELSHD, 1);      g.fillRect(10, 63 + elY, 9, 14);
+    g.fillStyle(C.ELG, 1);        g.fillRect(21, 63 + elY, 9, 14);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(21, 63 + elY, 9, 2);
+    g.fillStyle(C.ELSHD, 1);      g.fillRect(34, 63 + elY, 9, 14);
+    g.fillStyle(C.ELG, 1);        g.fillRect(45, 63 + elY, 9, 14);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(45, 63 + elY, 9, 2);
+    // 象蹄
+    g.fillStyle(C.FOOT, 1);       g.fillRect(10, 77 + elY, 9, 2);
+    g.fillStyle(C.FOOT, 1);       g.fillRect(21, 77 + elY, 9, 2);
+    g.fillStyle(C.FOOT, 1);       g.fillRect(34, 77 + elY, 9, 2);
+    g.fillStyle(C.FOOT, 1);       g.fillRect(45, 77 + elY, 9, 2);
+    // 象尾
+    g.fillStyle(C.ELG, 1);        g.fillRect(4, 54 + elY, 6, 3);
+    g.fillStyle(C.ELSHD, 1);      g.fillRect(2, 56 + elY, 3, 2);
+    g.fillStyle(C.DBEARD, 1);     g.fillRect(1, 57 + elY, 2, 1);
 
-    // ── 皮甲身躯 (leather armored body) ──
-    g.fillStyle(C.ARMR, 1);       g.fillRect(20, 19, 22, 14);
-    g.fillStyle(C.AHL, 1);        g.fillRect(26, 20, 10, 5);
-    g.fillStyle(C.AHL, 1);        g.fillRect(26, 26, 10, 2);
-    // arm armor bands
-    g.fillStyle(C.BRNZ, 1);       g.fillRect(18, 23, 4, 3);
-    g.fillStyle(C.BRNZ, 1);       g.fillRect(40, 23, 4, 3);
-
-    // ── 朱红马鞍 (red howdah saddle + gold trim) ──
-    g.fillStyle(C.SADL, 1);       g.fillRect(14, 33, 34, 7);
-    g.fillStyle(C.GOLD, 1);       g.fillRect(14, 33, 34, 1);   // top gold trim
-    g.fillStyle(C.GOLD, 1);       g.fillRect(14, 39, 34, 1);   // bottom gold trim
-    g.fillStyle(C.FSHD, 1);       g.fillRect(14, 36, 34, 2);   // middle shadow
-
-    // ═══════════ 下半：南中战象 ═══════════
-    // ── 象头 (elephant head, front-facing) ──
-    g.fillStyle(C.ELG, 1);        g.fillRect(32, 40, 30, 14);
-    g.fillStyle(C.ELHL, 1);       g.fillRect(34, 41, 6, 7);
-    // elephant eye
-    g.fillStyle(C.EYE_B, 1);      g.fillRect(46, 42, 4, 3);
-    g.fillStyle(C.EYEW, 1);       g.fillRect(47, 42, 2, 1);
-    // ear flap
-    g.fillStyle(C.ELG, 1);        g.fillRect(60, 41, 4, 10);
-    g.fillStyle(C.ELHL, 1);       g.fillRect(61, 42, 2, 3);
-
-    // ── 象牙 (ivory tusks) ──
-    g.fillStyle(C.IVORY, 1);      g.fillRect(24, 46, 16, 4);
-    g.fillStyle(C.IVORY, 1);      g.fillRect(22, 44, 6, 3);
-    g.fillStyle(C.IVSD, 1);       g.fillRect(24, 49, 16, 1);
-
-    // ── 象鼻 (trunk curving down-right) ──
-    g.fillStyle(C.ELG, 1);        g.fillRect(42, 52, 14, 5);
-    g.fillStyle(C.ELG, 1);        g.fillRect(48, 56, 10, 7);
-    g.fillStyle(C.ELG, 1);        g.fillRect(53, 62, 6, 8);
-    g.fillStyle(C.ELHL, 1);       g.fillRect(44, 53, 4, 2);   // trunk highlight
-    g.fillStyle(C.ELHL, 1);       g.fillRect(50, 57, 3, 4);
-
-    // ── 象身 (main body) ──
-    g.fillStyle(C.ELG, 1);        g.fillRect(8, 43, 28, 20);
-    g.fillStyle(C.ELHL, 1);       g.fillRect(10, 46, 18, 8);
-    g.fillStyle(C.ELSHD, 1);      g.fillRect(10, 58, 24, 4);   // belly shadow
-    // body rivet/armor plates (war elephant)
-    g.fillStyle(C.GOLD, 1);       g.fillRect(12, 44, 3, 3);
-    g.fillStyle(C.GOLD, 1);       g.fillRect(22, 44, 3, 3);
-    g.fillStyle(C.GOLD, 1);       g.fillRect(12, 54, 3, 3);
-    g.fillStyle(C.GOLD, 1);       g.fillRect(22, 54, 3, 3);
-
-    // ── 四柱象腿 (4 legs, 2 visible front + 2 back) ──
-    // 左后腿 (back-left, darker)
-    g.fillStyle(C.ELSHD, 1);      g.fillRect(10, 63, 9, 14);
-    // 右后腿 (back-right)
-    g.fillStyle(C.ELG, 1);        g.fillRect(21, 63, 9, 14);
-    g.fillStyle(C.ELHL, 1);       g.fillRect(21, 63, 9, 2);
-    // 左前腿 (front-left, darker)
-    g.fillStyle(C.ELSHD, 1);      g.fillRect(34, 63, 9, 14);
-    // 右前腿 (front-right)
-    g.fillStyle(C.ELG, 1);        g.fillRect(45, 63, 9, 14);
-    g.fillStyle(C.ELHL, 1);       g.fillRect(45, 63, 9, 2);
-
-    // ── 象蹄 (feet/toenails) ──
-    g.fillStyle(C.FOOT, 1);       g.fillRect(10, 77, 9, 2);
-    g.fillStyle(C.FOOT, 1);       g.fillRect(21, 77, 9, 2);
-    g.fillStyle(C.FOOT, 1);       g.fillRect(34, 77, 9, 2);
-    g.fillStyle(C.FOOT, 1);       g.fillRect(45, 77, 9, 2);
-
-    // ── 象尾 (tail, left side) ──
-    g.fillStyle(C.ELG, 1);        g.fillRect(4, 54, 6, 3);
-    g.fillStyle(C.ELSHD, 1);      g.fillRect(2, 56, 3, 2);
-    g.fillStyle(C.DBEARD, 1);     g.fillRect(1, 57, 2, 1);    // tail tuft
+    // ── defeated 灰色覆盖 ──
+    if (anim === 'defeated' && liftY > 3) {
+      g.fillStyle(0x0F172A, 0.6);
+      g.fillRect(0, Math.max(0, 20 + elY), 64, 60);
+    }
   }
 }

@@ -105,7 +105,7 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     y: number,
     config?: Partial<BossConfig>,
   ) {
-    super(scene, x, y, 'boss_meng_huo_placeholder');
+    super(scene, x, y, 'boss_idle_0');
     scene.add.existing(this as unknown as Phaser.GameObjects.GameObject);
     scene.physics.add.existing(this as unknown as Phaser.GameObjects.GameObject);
 
@@ -135,6 +135,15 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
   }
 
   // ─────────────────────────────────────────────────
+  // 安全播放动画（避免重复触发同一动画）
+  // ─────────────────────────────────────────────────
+  private playAnimSafe(key: string): void {
+    if (this.anims.exists(key) && (!this.anims.currentAnim || this.anims.currentAnim.key !== key)) {
+      this.anims.play(key);
+    }
+  }
+
+  // ─────────────────────────────────────────────────
   // 激活（玩家到达触发点时调用）
   // ─────────────────────────────────────────────────
   activate(): void {
@@ -143,6 +152,12 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     this.setAlpha(1);
     this.setActive(true);
     this._state = BossState.IDLE;
+
+    // 🔧 激活动画 — 由 Scene.spawnBoss() 确保动画已注册
+    if (this.anims.exists('boss_idle')) {
+      this.anims.play('boss_idle');
+      console.log('[Boss] 🎬 activate() → anims.play(boss_idle) 已调用');
+    }
 
     this.bus.emit(GameEvent.BOSS_SPAWNED, { bossId: this._cfg.id });
     this.bus.emit(GameEvent.BOSS_HP_CHANGED, {
@@ -241,8 +256,10 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     const spd = this._cfg.speed * phaseDef.speedMul;
     if (distX > 60) {
       body.setVelocityX(this._facingRight ? spd : -spd);
+      this.playAnimSafe('boss_walk');
     } else {
       body.setVelocityX(0);
+      this.playAnimSafe('boss_idle');
     }
   }
 
@@ -391,6 +408,7 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     });
 
     if (this._hp <= 0) {
+      this.playAnimSafe('boss_defeated');
       this.triggerDefeat();
       return;
     }
@@ -398,6 +416,7 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     // 受伤硬直
     this._state = BossState.HURT;
     this._hurtTimer = HURT_FLASH_MS;
+    this.playAnimSafe('boss_hurt');
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setVelocityX(0);
 
@@ -531,6 +550,8 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     this._cooldowns[def.name] = def.cooldownMs;
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setVelocityX(0);
+    // 播放对应攻击动画
+    this.playAnimSafe(`boss_${def.name}`);
   }
 
   private finishAttack(): void {
