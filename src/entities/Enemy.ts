@@ -52,7 +52,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     y: number,
     config?: Partial<EnemyConfig>,
   ) {
-    super(scene, x, y, 'enemy_placeholder');
+    const texKey = scene.textures.exists('enemy_barbarian') ? 'enemy_barbarian' : 'enemy_placeholder';
+    super(scene, x, y, texKey);
     scene.add.existing(this as unknown as Phaser.GameObjects.GameObject);
     scene.physics.add.existing(this as unknown as Phaser.GameObjects.GameObject);
 
@@ -61,10 +62,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this._spawnX = x;
 
     const body = this.body as Phaser.Physics.Arcade.Body;
-    // 碰撞体覆盖近全 sprite (24×40)，仅留 1px 边距
-    // 垂直居中：避免子弹从头顶飞过 或 从脚下穿过
-    body.setSize(22, 38);
-    body.setOffset(1, 1);
+    // 32×32 sprite → 碰撞体 28×28，居中（留 2px 宽容边距）
+    body.setSize(28, 28);
+    body.setOffset(2, 2);
     body.setMaxVelocityX(this._cfg.speed * CHASE_SPEED_MUL);
     body.setCollideWorldBounds(true);  // 不走出世界边界
     this.setDepth(8);
@@ -73,6 +73,29 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       enemyType: this._cfg.type,
       position: { x, y },
     });
+
+    // ⚠️ Phase 3 BugFix: 初始状态为 PATROL，需显式播放动画
+    //    setEnemyState 只在状态变化时播放动画，构造时需手动触发
+    if (this.scene.textures.exists('enemy_barbarian')) {
+      this.play('enemy_patrol');
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  // 状态切换（含动画播放）
+  // ─────────────────────────────────────────────────
+  private setEnemyState(next: EnemyState): void {
+    if (next === this._state) return;
+    this._state = next;
+
+    if (this.scene.textures.exists('enemy_barbarian')) {
+      switch (next) {
+        case EnemyState.PATROL: this.play('enemy_patrol', true); break;
+        case EnemyState.CHASE:  this.play('enemy_patrol', true); break;  // 追击复用巡逻动画
+        case EnemyState.HURT:   this.play('enemy_hurt', true);   break;
+        case EnemyState.DEATH:  this.play('enemy_death', true);  break;
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────
@@ -94,7 +117,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       // 闪烁效果（高频 alpha 切换）
       this.setAlpha(Math.floor(this._hurtTimer / 50) % 2 === 0 ? 0.4 : 1);
       if (this._hurtTimer <= 0) {
-        this._state = EnemyState.PATROL;
+        this.setEnemyState(EnemyState.PATROL);
         this.setAlpha(1);
       }
       return;
@@ -112,12 +135,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         distX > this._cfg.detectRange + CHASE_LEAVE_MARGIN ||
         distY > VERTICAL_CHASE_MAX + CHASE_LEAVE_MARGIN
       ) {
-        this._state = EnemyState.PATROL;
+        this.setEnemyState(EnemyState.PATROL);
       }
     } else {
       // 巡逻态 → 判断是否应转入追击
       if (distX < this._cfg.detectRange && distY < VERTICAL_CHASE_MAX) {
-        this._state = EnemyState.CHASE;
+        this.setEnemyState(EnemyState.CHASE);
       }
     }
 
@@ -185,7 +208,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this._hp <= 0) {
       this.die();
     } else {
-      this._state    = EnemyState.HURT;
+      this.setEnemyState(EnemyState.HURT);
       this._hurtTimer = HURT_FLASH_MS;
 
       // 击退
@@ -198,7 +221,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // 死亡
   // ─────────────────────────────────────────────────
   private die(): void {
-    this._state = EnemyState.DEATH;
+    this.setEnemyState(EnemyState.DEATH);
     this._deathTimer = DEATH_FADE_MS;
 
     const body = this.body as Phaser.Physics.Arcade.Body;

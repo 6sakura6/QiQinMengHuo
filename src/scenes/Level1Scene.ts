@@ -138,6 +138,7 @@ export class Level1Scene extends Phaser.Scene {
     this.events.on('shutdown', this.shutdown, this);
 
     this.buildGrayboxTextures();
+    this.registerAnimations();
     this.buildMap();
     this.spawnPlayer();
     this.setupWeaponSystem();
@@ -385,6 +386,39 @@ export class Level1Scene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────
+  // 动画注册（Phase 3 精灵表帧区域定义）
+  // ─────────────────────────────────────────────────
+  private registerAnimations(): void {
+    if (!this.anims.exists('player_idle') && this.textures.exists('player')) {
+      this.anims.create({ key: 'player_idle',  frames: this.anims.generateFrameNumbers('player', { start: 0,  end: 3 }),  frameRate: 6,  repeat: -1 });
+      this.anims.create({ key: 'player_run',   frames: this.anims.generateFrameNumbers('player', { start: 4,  end: 9 }),  frameRate: 10, repeat: -1 });
+      this.anims.create({ key: 'player_jump',  frames: this.anims.generateFrameNumbers('player', { start: 10, end: 13 }), frameRate: 8,  repeat: 0 });
+      this.anims.create({ key: 'player_shoot', frames: this.anims.generateFrameNumbers('player', { start: 14, end: 17 }), frameRate: 12, repeat: 0 });
+      this.anims.create({ key: 'player_hurt',  frames: this.anims.generateFrameNumbers('player', { start: 18, end: 19 }), frameRate: 8,  repeat: 0 });
+      this.anims.create({ key: 'player_die',   frames: this.anims.generateFrameNumbers('player', { start: 20, end: 23 }), frameRate: 10, repeat: 0 });
+    }
+
+    if (!this.anims.exists('enemy_patrol') && this.textures.exists('enemy_barbarian')) {
+      // Phase 3: 程序化精灵表，8×4 布局，动画从 frame 0 开始
+      // patrol: 0-3, hurt: 4-6, death: 7-11
+      this.anims.create({ key: 'enemy_patrol', frames: this.anims.generateFrameNumbers('enemy_barbarian', { start: 0, end: 3 }),  frameRate: 5,  repeat: -1 });
+      this.anims.create({ key: 'enemy_hurt',   frames: this.anims.generateFrameNumbers('enemy_barbarian', { start: 4, end: 6 }),  frameRate: 8,  repeat: 0 });
+      this.anims.create({ key: 'enemy_death',  frames: this.anims.generateFrameNumbers('enemy_barbarian', { start: 7, end: 11 }), frameRate: 10, repeat: 0 });
+    }
+
+    // Phase 3 Boss 动画: idle(0-3) charge(4-9) stomp(10-13) sweep(14-17) hurt(18-19) fall(20-25) captured(26-29)
+    if (!this.anims.exists('boss_idle') && this.textures.exists('boss_menghuo')) {
+      this.anims.create({ key: 'boss_idle',     frames: this.anims.generateFrameNumbers('boss_menghuo', { start: 0,  end: 3 }),  frameRate: 5,  repeat: -1 });
+      this.anims.create({ key: 'boss_charge',   frames: this.anims.generateFrameNumbers('boss_menghuo', { start: 4,  end: 9 }),  frameRate: 10, repeat: 0 });
+      this.anims.create({ key: 'boss_stomp',    frames: this.anims.generateFrameNumbers('boss_menghuo', { start: 10, end: 13 }), frameRate: 8,  repeat: 0 });
+      this.anims.create({ key: 'boss_sweep',    frames: this.anims.generateFrameNumbers('boss_menghuo', { start: 14, end: 17 }), frameRate: 10, repeat: 0 });
+      this.anims.create({ key: 'boss_hurt',     frames: this.anims.generateFrameNumbers('boss_menghuo', { start: 18, end: 19 }), frameRate: 8,  repeat: 0 });
+      this.anims.create({ key: 'boss_fall',     frames: this.anims.generateFrameNumbers('boss_menghuo', { start: 20, end: 25 }), frameRate: 12, repeat: 0 });
+      this.anims.create({ key: 'boss_captured', frames: this.anims.generateFrameNumbers('boss_menghuo', { start: 26, end: 29 }), frameRate: 6,  repeat: 0 });
+    }
+  }
+
+  // ─────────────────────────────────────────────────
   // 武器系统（Batch 2）
   // ─────────────────────────────────────────────────
   private setupWeaponSystem(): void {
@@ -587,7 +621,12 @@ export class Level1Scene extends Phaser.Scene {
     // 关卡重启（玩家死亡触发）— Batch 8: 追踪死亡次数
     // 🔧 热修复: 使用 delayedCall(0) 延迟一帧执行 scene.restart()，
     //    避免从 Player.die() 的延时回调中直接调用 restart 导致的 Phaser 内部竞态。
+    // 🛡️ Phase 3 BugFix: 若擒获流程已启动，禁止 LEVEL_RESTART（防止清除 EventBus 导致对话链断裂）
     this.bus.on(GameEvent.LEVEL_RESTART, (_payload) => {
+      if (this._captureStarted) {
+        console.warn('[Level1Scene] 🛡️ 擒获流程已启动，忽略 LEVEL_RESTART（防止对话链断裂）');
+        return;
+      }
       this._deathCount++;
       this.bus.clear();
       // 延迟到下一帧：确保不在任何 Phaser 内部迭代（TweenManager/TimerEvent）中销毁场景
@@ -697,11 +736,15 @@ export class Level1Scene extends Phaser.Scene {
     // ── 擒获流程事件（Batch 7）────────────────────
     // 擒获对话：孟获被擒后的不服台词
     this.bus.on(GameEvent.CAPTURE_DIALOG_START, (_payload) => {
-      this.dialogSys.triggerByEvent(DialogTrigger.BOSS_DEFEAT);
+      console.log('[Level1Scene] 🔍 CAPTURE_DIALOG_START handler — 准备触发 BOSS_DEFEAT 对话');
+      console.log(`  dialogSys.isActive=${this.dialogSys.isActive}, _dialogActive=${this._dialogActive}`);
+      const found = this.dialogSys.triggerByEvent(DialogTrigger.BOSS_DEFEAT);
+      console.log(`  triggerByEvent(BOSS_DEFEAT) 结果: ${found ? '找到对话' : '❌ 未找到对话!'}`);
     });
 
     // 释放对话：诸葛亮释放孟获台词
     this.bus.on(GameEvent.CAPTURE_RELEASE_START, (_payload) => {
+      console.log('[Level1Scene] 🔍 CAPTURE_RELEASE_START handler — 准备触发 RELEASE 对话');
       this.dialogSys.triggerByEvent(DialogTrigger.RELEASE);
     });
 

@@ -33,17 +33,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   // ─────────────────────────────────────────────────
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    // 先用 fallback key；美术资源到位后改 'player'
-    super(scene, x, y, 'player_placeholder');
+    // 有真实精灵表就用，否则退化到灰盒占位
+    const texKey = scene.textures.exists('player') ? 'player' : 'player_placeholder';
+    super(scene, x, y, texKey);
     scene.add.existing(this as unknown as Phaser.GameObjects.GameObject);
     scene.physics.add.existing(this as unknown as Phaser.GameObjects.GameObject);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(24, 40);          // 碰撞盒（比精灵小，手感更好）
-    body.setOffset(4, 8);
+    // 48×48 精灵 → 碰撞体 40×42，居中
+    // offset = ((48-40)/2, (48-42)/2) = (4, 3)
+    body.setSize(40, 42);
+    body.setOffset(4, 3);
     body.setMaxVelocityX(PLAYER_SPEED);
     body.setGravityY(0);           // 由世界重力提供，不再单独设置
     this.setDepth(10);
+
+    // ⚠️ Phase 3 BugFix: 初始状态为 IDLE，需显式播放动画
+    //    setPlayerState 只在状态变化时播放动画，构造时需手动触发
+    if (scene.textures.exists('player')) {
+      this.play('player_idle');
+    }
   }
 
   // ─────────────────────────────────────────────────
@@ -139,8 +148,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const prev = this._playerState;
     this._playerState = next;
 
-    // 播放对应动画（灰盒阶段先 log，Batch 3 换成真实 anims）
-    // this.anims.play(`player_${next}`, true);
+    // ── 播放对应动画（有真实纹理时） ──
+    if (this.scene.textures.exists('player')) {
+      switch (next) {
+        case PlayerState.IDLE:          this.play('player_idle', true);  break;
+        case PlayerState.RUN:           this.play('player_run', true);   break;
+        case PlayerState.JUMP:          this.play('player_jump', true);  break;
+        case PlayerState.FALL:          this.play({ key: 'player_jump', startFrame: 3, frameRate: 0 }); break; // 冻结在末帧（空中最高点）
+        case PlayerState.SHOOT:         this.play('player_shoot', true); break;
+        case PlayerState.HURT:          this.play('player_hurt', true);  break;
+        case PlayerState.DEATH:         this.play('player_die', true);   break;
+        case PlayerState.CUTSCENE_LOCK: this.play('player_idle', true);  break; // 复用 idle
+      }
+    }
 
     // 更新闪烁效果（无敌状态）
     this.setAlpha(next === PlayerState.HURT ? 0.5 : 1);

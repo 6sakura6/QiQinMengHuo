@@ -14,6 +14,18 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     const A = 'assets'; // 短前缀
 
+    // ── 加载错误监听（诊断纹理加载失败） ───────────
+    this.load.on('loaderror', (file: Phaser.Loader.File) => {
+      console.error(`[BootScene] ❌ 资源加载失败: ${file.key} → ${file.url}`);
+    });
+    // 加载完成诊断
+    this.load.on('complete', () => {
+      console.log('[BootScene] ✅ 所有资源加载完成');
+      console.log(`  player spritesheet: ${this.textures.exists('player') ? '✓' : '✗ 缺失!'}`);
+      console.log(`  enemy_barbarian spritesheet: ${this.textures.exists('enemy_barbarian') ? '✓' : '✗ 缺失!'}`);
+      console.log(`  boss_menghuo spritesheet: ${this.textures.exists('boss_menghuo') ? '✓' : '✗ 缺失!'}`);
+    });
+
     // ── 精灵表（sprite sheets） ─────────────────────
     this.load.spritesheet('player',          `${A}/sprites/player/player.png`,          { frameWidth: 48, frameHeight: 48 });
     this.load.spritesheet('enemy_barbarian', `${A}/sprites/enemy/enemy_barbarian.png`,  { frameWidth: 32, frameHeight: 32 });

@@ -105,7 +105,10 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     y: number,
     config?: Partial<BossConfig>,
   ) {
-    super(scene, x, y, 'boss_meng_huo_placeholder');
+    // Phase 3 集成：优先使用真实精灵表，加载失败则退化到灰盒占位
+    const texKey = scene.textures.exists('boss_menghuo') ? 'boss_menghuo' : 'boss_meng_huo_placeholder';
+    console.log(`[BossMengHuoL1] 纹理选择: ${texKey} (boss_menghuo 存在=${scene.textures.exists('boss_menghuo')})`);
+    super(scene, x, y, texKey);
     scene.add.existing(this as unknown as Phaser.GameObjects.GameObject);
     scene.physics.add.existing(this as unknown as Phaser.GameObjects.GameObject);
 
@@ -113,10 +116,12 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     this._hp    = this._cfg.maxHp;
     this._maxHp = this._cfg.maxHp;
 
-    // 碰撞体：覆盖 sprite 主体（64×80），留 3px 边距
+    // Phase 3 96×96 精灵: 碰撞体 80×60，底部对齐
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(58, 74);
-    body.setOffset(3, 3);
+    // 大象身体约占下半部分 60px 高，宽度约 80px
+    // offset X = (96-80)/2 = 8, offset Y = 96-60 = 36（底部对齐）
+    body.setSize(80, 60);
+    body.setOffset(8, 36);
     body.setMaxVelocity(400, 600);
     body.setCollideWorldBounds(true);
     body.setAllowGravity(true);
@@ -143,6 +148,7 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     this.setAlpha(1);
     this.setActive(true);
     this._state = BossState.IDLE;
+    this.playAnim(BossState.IDLE);
 
     this.bus.emit(GameEvent.BOSS_SPAWNED, { bossId: this._cfg.id });
     this.bus.emit(GameEvent.BOSS_HP_CHANGED, {
@@ -400,6 +406,7 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     this._hurtTimer = HURT_FLASH_MS;
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setVelocityX(0);
+    this.playAnim(BossState.HURT);
 
     // 微击退
     const dir = this._facingRight ? -1 : 1;
@@ -421,13 +428,18 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     // 注意：physics.debug=true 时 body.enable=false 仍可能渲染紫色碰撞盒轮廓，
     // 此为 Phaser 调试渲染器的已知行为，生产环境无影响。
 
-    // 击败视觉：白闪 → 灰色（战败但仍可见）
-    this.setTint(0xffffff);
-    this.scene.time.delayedCall(400, () => {
-      if (this._state === BossState.DEFEATED && this.active) {
-        this.setTint(0x666666);
-      }
-    });
+    // 击败视觉：播放战败动画（有真实纹理时），否则用 tint 退化为灰色
+    if (this.scene.textures.exists('boss_menghuo')) {
+      this.playAnim(BossState.DEFEATED);
+      this.clearTint();
+    } else {
+      this.setTint(0xffffff);
+      this.scene.time.delayedCall(400, () => {
+        if (this._state === BossState.DEFEATED && this.active) {
+          this.setTint(0x666666);
+        }
+      });
+    }
 
     this.bus.emit(GameEvent.BOSS_DEFEATED, {
       bossId: this._cfg.id,
@@ -442,7 +454,7 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
   enterCaptured(): void {
     this._state = BossState.CAPTURED;
     this.clearTint();
-    this.setTint(0x4488ff);  // 蓝色 = 被擒
+    this.playAnim(BossState.CAPTURED);
 
     // 被擒缩放演出
     this.scene.tweens.add({
@@ -467,6 +479,7 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
       this._phaseTransTimer = PHASE_TRANS_MS;
       const body = this.body as Phaser.Physics.Arcade.Body;
       body.setVelocityX(0);
+      this.playAnim(BossState.PHASE_TRANSITION);
 
       this.bus.emit(GameEvent.BOSS_PHASE_CHANGE, {
         phase: newPhase,
@@ -531,6 +544,7 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     this._cooldowns[def.name] = def.cooldownMs;
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setVelocityX(0);
+    this.playAnim(def.state);
   }
 
   private finishAttack(): void {
@@ -541,6 +555,7 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
     this.clearTint();
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setVelocityX(0);
+    this.playAnim(BossState.IDLE);
   }
 
   // ═══════════════════════════════════════════════════
@@ -578,6 +593,28 @@ export class BossMengHuoL1 extends Phaser.Physics.Arcade.Sprite {
       duration: 400,
       onComplete: () => gfx.destroy(),
     });
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 动画播放（Phase 3 集成，带 fallback）
+  // ═══════════════════════════════════════════════════
+  private playAnim(state: BossState): void {
+    if (!this.scene.textures.exists('boss_menghuo')) return;
+    try {
+      switch (state) {
+        case BossState.IDLE:            this.play('boss_idle', true); break;
+        case BossState.CHARGING:        this.play('boss_charge', true); break;
+        case BossState.STOMP:           this.play('boss_stomp', true); break;
+        case BossState.SWIPE:           this.play('boss_sweep', true); break;
+        case BossState.HURT:            this.play('boss_hurt', true); break;
+        case BossState.DEFEATED:        this.play('boss_fall', true); break;
+        case BossState.CAPTURED:        this.play('boss_captured', true); break;
+        // PHASE_TRANSITION 复用 idle（转阶段闪白期间播放 idle 即可）
+        case BossState.PHASE_TRANSITION: this.play('boss_idle', true); break;
+      }
+    } catch (_) {
+      // 动画 key 不存在时静默退化（如 animation 未注册）
+    }
   }
 
   // ═══════════════════════════════════════════════════
