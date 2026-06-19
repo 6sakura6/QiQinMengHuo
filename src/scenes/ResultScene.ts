@@ -81,8 +81,10 @@ export class ResultScene extends Phaser.Scene {
 
     const subtitle = this.add.text(W / 2, 95, this._data.levelName, {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '14px',
+      fontSize: '20px',
       color: COLOR_SUB,
+      stroke: '#000000',
+      strokeThickness: 2,
     }).setOrigin(0.5).setAlpha(0);
 
     // ── 统计面板（Phase 3: 暗底 + 金色像素边框）───
@@ -106,14 +108,18 @@ export class ResultScene extends Phaser.Scene {
       const y = panelY + 24 + i * 48;
       const label = this.add.text(W / 2 - 150, y, s.label, {
         fontFamily: '"Press Start 2P", monospace',
-        fontSize: '11px',
+        fontSize: '14px',
         color: COLOR_SUB,
+        stroke: '#000000',
+        strokeThickness: 2,
       }).setOrigin(0, 0.5).setAlpha(0);
 
       const value = this.add.text(W / 2 + 150, y, s.value, {
         fontFamily: '"Press Start 2P", monospace',
-        fontSize: '18px',
+        fontSize: '24px',
         color: s.color,
+        stroke: '#000000',
+        strokeThickness: 2,
       }).setOrigin(1, 0.5).setAlpha(0);
 
       statTexts.push(label, value);
@@ -123,10 +129,12 @@ export class ResultScene extends Phaser.Scene {
     const styleLabel = this.detectStyle();
     const styleTag = this.add.text(W / 2, panelY + 157, styleLabel, {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '10px',
+      fontSize: '13px',
       color: COLOR_MUTED,
       backgroundColor: COLOR_PANEL,
       padding: { x: 12, y: 6 },
+      stroke: '#000000',
+      strokeThickness: 1,
     }).setOrigin(0.5).setAlpha(0);
 
     // ── 操作区（Phase 3 按钮风格）─────────────────
@@ -228,8 +236,10 @@ export class ResultScene extends Phaser.Scene {
   } {
     const text = this.add.text(x, y, label, {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '11px',
+      fontSize: '15px',
       color: COLOR_TEXT,
+      stroke: '#000000',
+      strokeThickness: 2,
     }).setOrigin(0.5).setAlpha(0).setInteractive({ useHandCursor: true });
 
     text.on('pointerover', () => {

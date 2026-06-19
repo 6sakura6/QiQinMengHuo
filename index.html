@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>七擒孟获 | Phase 2 MVP</title>
+  <!-- 像素字体：Press Start 2P（标题） + VT323（正文/标签） -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -19,8 +23,11 @@
     }
     #game-container canvas {
       display: block;
-      image-rendering: pixelated;
+      /* 像素画使用 pixelated，但文字需要保留适度平滑 */
+      image-rendering: auto;
     }
+    /* 预加载字体确保首帧即可用 */
+    .font-preload { font-family: 'Press Start 2P', 'VT323', monospace; position: absolute; visibility: hidden; }
   </style>
 </head>
 <body>

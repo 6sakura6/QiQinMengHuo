@@ -26,16 +26,18 @@ export class BootScene extends Phaser.Scene {
     // 进度提示
     const title = this.add
       .text(width / 2, height / 2 - 20, '七擒孟获', {
-        fontFamily: 'monospace',
-        fontSize: '32px',
+        fontFamily: '"Press Start 2P", "SimHei", monospace',
+        fontSize: '36px',
         color: '#d4a574',
+        stroke: '#000000',
+        strokeThickness: 3,
       })
       .setOrigin(0.5);
 
     const sub = this.add
-      .text(width / 2, height / 2 + 20, 'Phase 2 · 加载中…', {
-        fontFamily: 'monospace',
-        fontSize: '13px',
+      .text(width / 2, height / 2 + 24, 'Phase 2 · 加载中…', {
+        fontFamily: '"VT323", monospace',
+        fontSize: '18px',
         color: '#667788',
       })
       .setOrigin(0.5);

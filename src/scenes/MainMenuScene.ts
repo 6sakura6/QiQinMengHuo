@@ -428,9 +428,11 @@ export class MainMenuScene extends Phaser.Scene {
 
     // ── 副标题：琥珀金小号像素字 ──
     this.subtitleText = this.add.text(W / 2, 202, 'SEVEN  CAPTURES  OF  MENG  HUO', {
-      fontSize: '10px',
+      fontSize: '14px',
       fontFamily: '"Press Start 2P", monospace',
       color: '#F59E0B',
+      stroke: '#000000',
+      strokeThickness: 2,
     }).setOrigin(0.5).setDepth(10).setAlpha(0);
 
     this.tweens.add({
@@ -620,7 +622,7 @@ export class MainMenuScene extends Phaser.Scene {
       // 按钮文字
       const color = disabled ? C.DISABLED
         : (isPrimary ? C.EMERALD : C.TEXT);
-      const fontSize = isPrimary ? '16px' : '12px';
+      const fontSize = isPrimary ? '22px' : '16px';
 
       const txt = this.add.text(W / 2, opt.y, opt.text, {
         fontSize,
@@ -648,9 +650,9 @@ export class MainMenuScene extends Phaser.Scene {
 
     // ── 光标箭头（翠绿闪烁）──
     this.cursor = this.add.text(
-      W / 2 - 165, this.menuOptions[0].y,
+      W / 2 - 155, this.menuOptions[0].y,
       '▶',
-      { fontSize: '12px', fontFamily: '"Press Start 2P", monospace', color: '#22C55E' },
+      { fontSize: '16px', fontFamily: '"Press Start 2P", monospace', color: '#22C55E', stroke: '#000000', strokeThickness: 2 },
     ).setOrigin(0.5).setDepth(13);
 
     this.tweens.add({
@@ -663,8 +665,8 @@ export class MainMenuScene extends Phaser.Scene {
 
     // ── 版本信息 ──
     this.versionText = this.add.text(W - 12, H - 10, 'v0.2 · 腾讯云黑客松', {
-      fontSize: '8px',
-      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '10px',
+      fontFamily: '"VT323", "Press Start 2P", monospace',
       color: '#64748B',
     }).setOrigin(1, 1).setDepth(12);
   }
@@ -791,9 +793,11 @@ export class MainMenuScene extends Phaser.Scene {
     this.inputLocked = true;
 
     const confirmTxt = this.add.text(W / 2, H - 60, '确定清除所有进度？(再按一次确认 / ESC取消)', {
-      fontSize: '9px',
+      fontSize: '13px',
       fontFamily: '"Press Start 2P", monospace',
       color: '#EF4444',
+      stroke: '#000000',
+      strokeThickness: 2,
     }).setOrigin(0.5).setDepth(93).setAlpha(0);
 
     this.tweens.add({ targets: confirmTxt, alpha: 1, duration: 200 });

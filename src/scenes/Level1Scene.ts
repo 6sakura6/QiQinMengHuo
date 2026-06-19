@@ -339,14 +339,18 @@ export class Level1Scene extends Phaser.Scene {
     this.platforms = this.physics.add.staticGroup();
     const tilesX = Math.ceil(MAP_WIDTH / TILE_SIZE) + 1;
 
+    // 🔧 所有地图 tile depth 锁定 ≤ 5，确保 UI 层 (depth ≥ 100) 永远在上
+    const MAP_DEPTH = 1;
+
     for (let i = 0; i < tilesX; i++) {
       // 地面：铺满 3 行
       for (let row = 0; row < 3; row++) {
-        this.platforms.create(
+        const tile = this.platforms.create(
           i * TILE_SIZE + TILE_SIZE / 2,
           GROUND_Y + row * TILE_SIZE,
           'ground_tile',
         );
+        tile.setDepth(MAP_DEPTH);
       }
     }
 
@@ -354,11 +358,12 @@ export class Level1Scene extends Phaser.Scene {
     for (const cfg of PLATFORM_CONFIGS) {
       const tileCount = Math.ceil(cfg.w / TILE_SIZE);
       for (let i = 0; i < tileCount; i++) {
-        this.platforms.create(
+        const tile = this.platforms.create(
           cfg.x + i * TILE_SIZE + TILE_SIZE / 2,
           cfg.y,
           'ground_tile',
         );
+        tile.setDepth(MAP_DEPTH);
       }
     }
 

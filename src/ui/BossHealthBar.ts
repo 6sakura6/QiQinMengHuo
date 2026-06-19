@@ -54,11 +54,11 @@ export class BossHealthBar {
     // 名称文字（Phase 3: 琥珀金像素体 + 黑色描边）
     this.nameText = this.scene.add.text(BAR_X + BAR_WIDTH / 2, NAME_Y, '', {
       fontFamily: '"Press Start 2P", monospace',
-      fontSize: '11px',
+      fontSize: '16px',
       color: COLOR_NAME,
       align: 'center',
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: 4,
     });
     this.nameText.setOrigin(0.5, 0);
     this.nameText.setDepth(d);
@@ -78,12 +78,12 @@ export class BossHealthBar {
     this.hpText = this.scene.add.text(
       BAR_X + BAR_WIDTH / 2, BAR_Y + BAR_HEIGHT / 2,
       '', {
-        fontFamily: 'monospace',
-        fontSize: '10px',
+        fontFamily: '"VT323", monospace',
+        fontSize: '14px',
         color: '#ffffff',
         align: 'center',
         stroke: '#000000',
-        strokeThickness: 2,
+        strokeThickness: 3,
       },
     );
     this.hpText.setOrigin(0.5, 0.5);
