@@ -480,21 +480,10 @@ export class Level1Scene extends Phaser.Scene {
     // ═══════════════════════════════════════
     // 游戏实体（保持不变）
     // ═══════════════════════════════════════
-    genTex('player_placeholder', 24, 40, (g) => {
-      g.fillStyle(0x2255cc, 1); g.fillRect(0, 0, 24, 40);
-      g.lineStyle(2, 0xaaaaff, 1); g.strokeRect(1, 1, 22, 38);
-    });
-    genTex('enemy_placeholder', 24, 40, (g) => {
-      g.fillStyle(0xaa2222, 1); g.fillRect(0, 0, 24, 40);
-      g.lineStyle(2, 0xff6644, 1); g.strokeRect(1, 1, 22, 38);
-    });
-    genTex('boss_meng_huo_placeholder', 64, 80, (g) => {
-      g.fillStyle(0x6A1B9A, 1); g.fillRect(0, 0, 64, 80);
-      g.lineStyle(2, 0xFFD700, 1); g.strokeRect(1, 1, 62, 78);
-    });
-    genTex('bullet_placeholder', 8, 4, (g) => {
-      g.fillStyle(0xffdd44, 1); g.fillRect(0, 0, 8, 4);
-    });
+    genTex('player_placeholder', 24, 40, (g) => { this.drawHanSoldier(g); });
+    genTex('enemy_placeholder', 24, 40, (g) => { this.drawBarbarianWarrior(g); });
+    genTex('boss_meng_huo_placeholder', 64, 80, (g) => { this.drawMengHuoOnElephant(g); });
+    genTex('bullet_placeholder', 12, 6, (g) => { this.drawCrossbowBolt(g); });
     genTex('fragment_marker', 16, 16, (g) => {
       g.fillStyle(0xFFD700, 1); g.fillRect(0, 0, 16, 16);
       g.lineStyle(2, 0xFFF8C0, 1); g.strokeRect(1, 1, 14, 14);
@@ -1407,6 +1396,34 @@ export class Level1Scene extends Phaser.Scene {
     console.log('[Level1Scene] 🎵 AudioManager 初始化完成，BGM 占位启动');
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // 像素三国武器 — 弩箭 / 弩矢 (12×6, 默认指向右)
+  // 配色：箭杆木色 0xD4A574 / 箭头铁色 0x9CA3AF / 羽尾朱砂 0xDC2626
+  // ═══════════════════════════════════════════════════════════
+  private drawCrossbowBolt(g: Phaser.GameObjects.Graphics): void {
+    const B = { WOOD: 0xD4A574, WSHD: 0xC4956A, METAL: 0x9CA3AF, MHL: 0xC0C7D0,
+                FLETCH: 0xDC2626, FLSHD: 0xB91C1C, TIE: 0x78350F };
+
+    // 箭杆 (shaft, running from x1 to x10)
+    g.fillStyle(B.WOOD, 1);       g.fillRect(1, 2, 11, 2);
+    g.fillStyle(B.WSHD, 1);       g.fillRect(1, 3, 10, 1);     // lower edge shadow
+
+    // 箭头 (arrowhead, triangular metal tip at right end)
+    g.fillStyle(B.METAL, 1);      g.fillRect(10, 1, 2, 4);    // tip base
+    g.fillStyle(B.MHL, 1);        g.fillRect(11, 0, 1, 6);    // point
+    g.fillStyle(B.MHL, 1);        g.fillRect(10, 1, 1, 1);    // tip highlight
+
+    // 箭羽 (fletching, 3-feather fan at left end)
+    g.fillStyle(B.FLETCH, 1);     g.fillRect(0, 0, 2, 6);     // upper feather
+    g.fillStyle(B.FLSHD, 1);      g.fillRect(0, 1, 1, 4);
+    g.fillStyle(B.FLETCH, 1);     g.fillRect(0, 0, 2, 1);     // top edge
+    g.fillStyle(B.FLETCH, 1);     g.fillRect(0, 5, 2, 1);     // bottom edge
+
+    // 缠绳 (binding at feather base)
+    g.fillStyle(B.TIE, 1);         g.fillRect(2, 1, 1, 4);
+    g.fillStyle(B.TIE, 1);         g.fillRect(3, 2, 1, 2);
+  }
+
   // ─────────────────────────────────────────────────
   // 开发辅助：背景网格
   // ─────────────────────────────────────────────────
@@ -1419,5 +1436,256 @@ export class Level1Scene extends Phaser.Scene {
     for (let y = -GAME_HEIGHT; y < GAME_HEIGHT * 2; y += TILE_SIZE) {
       gfx.lineBetween(0, y, MAP_WIDTH, y);
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 像素三国角色 — 汉军士卒 (24×40)
+  // 配色：铁灰盔 0x6B7280 / 红缨 0xDC2626 / 汉军蓝甲 0x3B5998
+  // ═══════════════════════════════════════════════════════════
+  private drawHanSoldier(g: Phaser.GameObjects.Graphics): void {
+    const C = { HELM: 0x6B7280, HHL: 0x9CA3AF, HSHD: 0x4B5563, CREST: 0xDC2626, CSHD: 0xB91C1C,
+                SKIN: 0xF5D0A9, EYE: 0x1A1A1A, ARMOR: 0x3B5998, AHL: 0x5B79B8, ASHD: 0x2B4988,
+                SASH: 0xDC2626, LEG: 0x1F2937, BOOT: 0x78350F, BHL: 0x92400E };
+
+    // ── 铁盔 (iron helmet dome + brim) ──
+    g.fillStyle(C.HELM, 1);       g.fillRect(7, 0, 10, 7);    // dome
+    g.fillStyle(C.HHL, 1);        g.fillRect(9, 1, 2, 3);     // dome highlight
+    g.fillStyle(C.HSHD, 1);       g.fillRect(7, 5, 10, 2);    // dome base shadow
+    g.fillStyle(C.HELM, 1);       g.fillRect(5, 7, 14, 2);    // brim
+    g.fillStyle(C.HHL, 1);        g.fillRect(6, 7, 12, 1);    // brim highlight
+
+    // ── 红缨 (red crest plume) ──
+    g.fillStyle(C.CREST, 1);      g.fillRect(11, 0, 2, 9);
+    g.fillStyle(C.CSHD, 1);       g.fillRect(12, 4, 1, 5);
+
+    // ── 面部 (face under helmet) ──
+    g.fillStyle(C.SKIN, 1);       g.fillRect(9, 9, 6, 4);
+    g.fillStyle(C.EYE, 1);        g.fillRect(10, 10, 2, 1);   // left eye
+    g.fillStyle(C.EYE, 1);        g.fillRect(13, 10, 2, 1);   // right eye
+
+    // ── 护颈 (gorget neck guard) ──
+    g.fillStyle(C.HELM, 1);       g.fillRect(6, 13, 12, 3);
+    g.fillStyle(C.HHL, 1);        g.fillRect(8, 13, 8, 1);
+
+    // ── 鳞甲 (blue scale armor chest) ──
+    g.fillStyle(C.ARMOR, 1);      g.fillRect(4, 16, 16, 11);
+    g.fillStyle(C.AHL, 1);        g.fillRect(10, 17, 4, 8);   // center highlight
+    g.fillStyle(C.AHL, 1);        g.fillRect(4, 16, 4, 4);    // left shoulder guard
+    g.fillStyle(C.AHL, 1);        g.fillRect(16, 16, 4, 4);   // right shoulder guard
+    // scale pattern lines
+    g.fillStyle(C.ASHD, 1);       g.fillRect(5, 19, 14, 1);
+    g.fillStyle(C.ASHD, 1);       g.fillRect(5, 22, 14, 1);
+    g.fillStyle(C.ASHD, 1);       g.fillRect(5, 25, 14, 1);
+
+    // ── 朱红腰封 (red sash belt) ──
+    g.fillStyle(C.SASH, 1);       g.fillRect(4, 27, 16, 3);
+    g.fillStyle(C.CSHD, 1);       g.fillRect(4, 29, 16, 1);
+
+    // ── 裤腿 (dark pants) ──
+    g.fillStyle(C.LEG, 1);        g.fillRect(5, 30, 6, 6);
+    g.fillStyle(C.LEG, 1);        g.fillRect(13, 30, 6, 6);
+
+    // ── 战靴 (brown boots) ──
+    g.fillStyle(C.BOOT, 1);       g.fillRect(4, 36, 7, 4);
+    g.fillStyle(C.BOOT, 1);       g.fillRect(13, 36, 7, 4);
+    g.fillStyle(C.BHL, 1);        g.fillRect(4, 36, 7, 1);    // boot top highlight
+    g.fillStyle(C.BHL, 1);        g.fillRect(13, 36, 7, 1);
+
+    // ── 右手持弩 (crossbow, right side) ──
+    const BOW = { WOOD: 0x78350F, WHL: 0x92400E, METAL: 0x9CA3AF, MHL: 0xC0C7D0,
+                  BOLT: 0xD4A574, TIP: 0x9CA3AF, FLETCH: 0xDC2626 };
+    // 弩臂 (stock, horizontal wooden body)
+    g.fillStyle(BOW.WOOD, 1);     g.fillRect(18, 21, 8, 3);
+    g.fillStyle(BOW.WHL, 1);      g.fillRect(18, 21, 8, 1);
+    // 弓弧 (bow limbs, vertical above & below stock)
+    g.fillStyle(BOW.METAL, 1);    g.fillRect(22, 16, 2, 5);    // upper limb
+    g.fillStyle(BOW.METAL, 1);    g.fillRect(22, 24, 2, 5);    // lower limb
+    g.fillStyle(BOW.MHL, 1);      g.fillRect(22, 18, 2, 1);    // limb highlight
+    // 弩弦 (bowstring)
+    g.fillStyle(0xE5E7EB, 1);     g.fillRect(22, 21, 1, 3);
+    // 待发弩箭 (bolt nocked on stock)
+    g.fillStyle(BOW.BOLT, 1);     g.fillRect(17, 20, 7, 1);    // shaft
+    g.fillStyle(BOW.TIP, 1);      g.fillRect(14, 20, 3, 1);    // arrowhead
+    g.fillStyle(BOW.FLETCH, 1);   g.fillRect(21, 19, 1, 3);    // fletching
+    // 弩机 (trigger mechanism)
+    g.fillStyle(BOW.METAL, 1);    g.fillRect(19, 24, 2, 2);
+      g.fillStyle(BOW.MHL, 1);      g.fillRect(19, 24, 2, 1);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 像素三国角色 — 蛮兵 (24×40)
+  // 配色：狂发棕 0x451A03 / 深肤 0xC4956A / 朱砂战纹 0xDC2626
+  //      兽皮甲 0x78350F / 骨饰 0xF5F5DC / 皮毛裙 0x6B4226
+  // ═══════════════════════════════════════════════════════════
+  private drawBarbarianWarrior(g: Phaser.GameObjects.Graphics): void {
+    const C = { HAIR: 0x451A03, HHL: 0x5A2A08, SKIN: 0xC4956A, SSHD: 0xB0855A,
+                WARP: 0xDC2626, EYE: 0xDC2626, BONE: 0xF5F5DC, BNSD: 0xD5D5BC,
+                LTHR: 0x78350F, LTHL: 0x92400E, FUR: 0x6B4226, FHL: 0x7B5236,
+                LEG: 0x5A3216, FEET: 0x9A755A };
+
+    // ── 狂发 (wild spiky hair) ──
+    g.fillStyle(C.HAIR, 1);       g.fillRect(6, 0, 12, 6);    // main mass
+    g.fillStyle(C.HAIR, 1);       g.fillRect(4, 1, 3, 2);     // left tuft
+    g.fillStyle(C.HAIR, 1);       g.fillRect(17, 1, 3, 3);    // right tuft
+    g.fillStyle(C.HAIR, 1);       g.fillRect(7, 0, 2, 2);     // left spike
+    g.fillStyle(C.HAIR, 1);       g.fillRect(15, 0, 2, 1);    // right spike
+    g.fillStyle(C.HHL, 1);        g.fillRect(9, 1, 2, 2);     // highlight
+    g.fillStyle(C.HHL, 1);        g.fillRect(14, 2, 2, 2);
+
+    // ── 面部 (dark skin + war paint) ──
+    g.fillStyle(C.SKIN, 1);       g.fillRect(8, 6, 8, 6);
+    g.fillStyle(C.BNSD, 1);       g.fillRect(9, 8, 2, 1);     // eye white (left)
+    g.fillStyle(C.BNSD, 1);       g.fillRect(13, 8, 2, 1);    // eye white (right)
+    g.fillStyle(C.EYE, 1);        g.fillRect(9, 8, 2, 1);     // fierce red eye
+    g.fillStyle(C.EYE, 1);        g.fillRect(13, 8, 2, 1);
+    // 朱砂战纹 (horizontal + vertical war stripes)
+    g.fillStyle(C.WARP, 1);       g.fillRect(7, 7, 10, 1);
+    g.fillStyle(C.WARP, 1);       g.fillRect(11, 6, 1, 9);
+
+    // ── 骨饰项链 (bone necklace) ──
+    g.fillStyle(C.BONE, 1);       g.fillRect(8, 13, 2, 2);
+    g.fillStyle(C.BONE, 1);       g.fillRect(11, 13, 2, 2);
+    g.fillStyle(C.BONE, 1);       g.fillRect(14, 13, 2, 2);
+
+    // ── 皮革甲 (leather vest / bare chest) ──
+    g.fillStyle(C.LTHR, 1);       g.fillRect(5, 15, 14, 7);
+    g.fillStyle(C.LTHL, 1);       g.fillRect(9, 16, 6, 4);    // chest highlight
+    // bare arms
+    g.fillStyle(C.SKIN, 1);       g.fillRect(3, 15, 3, 7);
+    g.fillStyle(C.SKIN, 1);       g.fillRect(18, 15, 3, 7);
+    g.fillStyle(C.SSHD, 1);       g.fillRect(4, 19, 2, 2);    // arm shadow
+
+    // ── 兽皮裙 (fur skirt with jagged bottom) ──
+    g.fillStyle(C.FUR, 1);        g.fillRect(5, 22, 14, 5);
+    g.fillStyle(C.FHL, 1);        g.fillRect(6, 22, 4, 2);    // fur tufts
+    g.fillStyle(C.FHL, 1);        g.fillRect(12, 22, 5, 2);
+    // jagged hem
+    g.fillStyle(C.LEG, 1);        g.fillRect(5, 26, 3, 1);
+    g.fillStyle(C.LEG, 1);        g.fillRect(10, 26, 4, 1);
+    g.fillStyle(C.LEG, 1);        g.fillRect(16, 26, 3, 1);
+
+    // ── 绑腿 (wrap leggings) ──
+    g.fillStyle(C.LEG, 1);        g.fillRect(6, 27, 5, 7);
+    g.fillStyle(C.LEG, 1);        g.fillRect(13, 27, 5, 7);
+    g.fillStyle(C.FHL, 1);        g.fillRect(6, 28, 5, 1);    // wrap stripes
+    g.fillStyle(C.FHL, 1);        g.fillRect(6, 31, 5, 1);
+    g.fillStyle(C.FHL, 1);        g.fillRect(13, 28, 5, 1);
+    g.fillStyle(C.FHL, 1);        g.fillRect(13, 31, 5, 1);
+
+    // ── 赤足 (bare feet) ──
+    g.fillStyle(C.FEET, 1);       g.fillRect(5, 34, 6, 6);
+    g.fillStyle(C.FEET, 1);       g.fillRect(13, 34, 6, 6);
+    g.fillStyle(C.SKIN, 1);       g.fillRect(6, 35, 4, 3);    // foot highlight
+    g.fillStyle(C.SKIN, 1);       g.fillRect(14, 35, 4, 3);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 像素三国角色 — 骑象孟获 Boss (64×80)
+  // 上半：南蛮王孟获 (铜盔 0xB45309 + 红羽 + 皮甲 + 怒目)
+  // 下半：南中战象 (灰皮 0x787878 + 象牙 0xF5F5DC + 朱鞍 0xDC2626)
+  // ═══════════════════════════════════════════════════════════
+  private drawMengHuoOnElephant(g: Phaser.GameObjects.Graphics): void {
+    const C = { BRNZ: 0xB45309, BHL: 0xCC5A14, BSHD: 0x93420A, FEATH: 0xDC2626, FSHD: 0xB91C1C,
+                SKIN: 0xC4956A, DBEARD: 0x451A03, EYE: 0xDC2626, EYEW: 0xF5F5DC,
+                ARMR: 0x78350F, AHL: 0x92400E, SADL: 0xDC2626, GOLD: 0xF59E0B,
+                ELG: 0x787878, ELHL: 0x969696, ELSHD: 0x585858, IVORY: 0xF5F5DC, IVSD: 0xE5E5CC,
+                FOOT: 0xD1D5DB, EYE_B: 0x1A1A1A };
+
+    // ═══════════ 上半：南蛮王孟获 ═══════════
+    // ── 铜盔 (bronze helmet dome) ──
+    g.fillStyle(C.BRNZ, 1);       g.fillRect(22, 0, 20, 8);
+    g.fillStyle(C.BHL, 1);        g.fillRect(24, 1, 4, 4);
+    g.fillStyle(C.BHL, 1);        g.fillRect(38, 1, 2, 3);
+    g.fillStyle(C.BSHD, 1);       g.fillRect(22, 6, 20, 2);
+
+    // ── 红羽冠 (red feather plume) ──
+    g.fillStyle(C.FEATH, 1);      g.fillRect(30, 0, 4, 14);
+    g.fillStyle(C.FSHD, 1);       g.fillRect(33, 5, 1, 9);
+    g.fillStyle(C.FEATH, 1);      g.fillRect(28, 1, 2, 3);    // side feather
+    g.fillStyle(C.FEATH, 1);      g.fillRect(35, 2, 3, 2);
+
+    // ── 怒目面庞 (fierce face) ──
+    g.fillStyle(C.SKIN, 1);       g.fillRect(23, 8, 16, 8);
+    // eyebrows (thick dark)
+    g.fillStyle(C.DBEARD, 1);     g.fillRect(25, 7, 5, 2);
+    g.fillStyle(C.DBEARD, 1);     g.fillRect(33, 7, 5, 2);
+    // fierce red eyes
+    g.fillStyle(C.EYEW, 1);       g.fillRect(26, 10, 3, 2);
+    g.fillStyle(C.EYEW, 1);       g.fillRect(34, 10, 3, 2);
+    g.fillStyle(C.EYE, 1);        g.fillRect(26, 10, 3, 1);
+    g.fillStyle(C.EYE, 1);        g.fillRect(34, 10, 3, 1);
+    // nose / mouth
+    g.fillStyle(C.SKIN, 1);       g.fillRect(29, 13, 2, 2);
+    g.fillStyle(C.DBEARD, 1);     g.fillRect(27, 16, 9, 3);   // beard
+
+    // ── 皮甲身躯 (leather armored body) ──
+    g.fillStyle(C.ARMR, 1);       g.fillRect(20, 19, 22, 14);
+    g.fillStyle(C.AHL, 1);        g.fillRect(26, 20, 10, 5);
+    g.fillStyle(C.AHL, 1);        g.fillRect(26, 26, 10, 2);
+    // arm armor bands
+    g.fillStyle(C.BRNZ, 1);       g.fillRect(18, 23, 4, 3);
+    g.fillStyle(C.BRNZ, 1);       g.fillRect(40, 23, 4, 3);
+
+    // ── 朱红马鞍 (red howdah saddle + gold trim) ──
+    g.fillStyle(C.SADL, 1);       g.fillRect(14, 33, 34, 7);
+    g.fillStyle(C.GOLD, 1);       g.fillRect(14, 33, 34, 1);   // top gold trim
+    g.fillStyle(C.GOLD, 1);       g.fillRect(14, 39, 34, 1);   // bottom gold trim
+    g.fillStyle(C.FSHD, 1);       g.fillRect(14, 36, 34, 2);   // middle shadow
+
+    // ═══════════ 下半：南中战象 ═══════════
+    // ── 象头 (elephant head, front-facing) ──
+    g.fillStyle(C.ELG, 1);        g.fillRect(32, 40, 30, 14);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(34, 41, 6, 7);
+    // elephant eye
+    g.fillStyle(C.EYE_B, 1);      g.fillRect(46, 42, 4, 3);
+    g.fillStyle(C.EYEW, 1);       g.fillRect(47, 42, 2, 1);
+    // ear flap
+    g.fillStyle(C.ELG, 1);        g.fillRect(60, 41, 4, 10);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(61, 42, 2, 3);
+
+    // ── 象牙 (ivory tusks) ──
+    g.fillStyle(C.IVORY, 1);      g.fillRect(24, 46, 16, 4);
+    g.fillStyle(C.IVORY, 1);      g.fillRect(22, 44, 6, 3);
+    g.fillStyle(C.IVSD, 1);       g.fillRect(24, 49, 16, 1);
+
+    // ── 象鼻 (trunk curving down-right) ──
+    g.fillStyle(C.ELG, 1);        g.fillRect(42, 52, 14, 5);
+    g.fillStyle(C.ELG, 1);        g.fillRect(48, 56, 10, 7);
+    g.fillStyle(C.ELG, 1);        g.fillRect(53, 62, 6, 8);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(44, 53, 4, 2);   // trunk highlight
+    g.fillStyle(C.ELHL, 1);       g.fillRect(50, 57, 3, 4);
+
+    // ── 象身 (main body) ──
+    g.fillStyle(C.ELG, 1);        g.fillRect(8, 43, 28, 20);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(10, 46, 18, 8);
+    g.fillStyle(C.ELSHD, 1);      g.fillRect(10, 58, 24, 4);   // belly shadow
+    // body rivet/armor plates (war elephant)
+    g.fillStyle(C.GOLD, 1);       g.fillRect(12, 44, 3, 3);
+    g.fillStyle(C.GOLD, 1);       g.fillRect(22, 44, 3, 3);
+    g.fillStyle(C.GOLD, 1);       g.fillRect(12, 54, 3, 3);
+    g.fillStyle(C.GOLD, 1);       g.fillRect(22, 54, 3, 3);
+
+    // ── 四柱象腿 (4 legs, 2 visible front + 2 back) ──
+    // 左后腿 (back-left, darker)
+    g.fillStyle(C.ELSHD, 1);      g.fillRect(10, 63, 9, 14);
+    // 右后腿 (back-right)
+    g.fillStyle(C.ELG, 1);        g.fillRect(21, 63, 9, 14);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(21, 63, 9, 2);
+    // 左前腿 (front-left, darker)
+    g.fillStyle(C.ELSHD, 1);      g.fillRect(34, 63, 9, 14);
+    // 右前腿 (front-right)
+    g.fillStyle(C.ELG, 1);        g.fillRect(45, 63, 9, 14);
+    g.fillStyle(C.ELHL, 1);       g.fillRect(45, 63, 9, 2);
+
+    // ── 象蹄 (feet/toenails) ──
+    g.fillStyle(C.FOOT, 1);       g.fillRect(10, 77, 9, 2);
+    g.fillStyle(C.FOOT, 1);       g.fillRect(21, 77, 9, 2);
+    g.fillStyle(C.FOOT, 1);       g.fillRect(34, 77, 9, 2);
+    g.fillStyle(C.FOOT, 1);       g.fillRect(45, 77, 9, 2);
+
+    // ── 象尾 (tail, left side) ──
+    g.fillStyle(C.ELG, 1);        g.fillRect(4, 54, 6, 3);
+    g.fillStyle(C.ELSHD, 1);      g.fillRect(2, 56, 3, 2);
+    g.fillStyle(C.DBEARD, 1);     g.fillRect(1, 57, 2, 1);    // tail tuft
   }
 }

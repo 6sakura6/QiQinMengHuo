@@ -40,11 +40,23 @@ export class Bullet extends Phaser.Physics.Arcade.Sprite {
     this._lifetimeMs = lifetimeMs;
   }
 
-  /** 发射：设置速度 + 存储伤害值到 Phaser Data 层 */
+  /** 发射：设置速度 + 箭矢朝向 + 存储伤害值到 Phaser Data 层 */
   launch(vx: number, vy: number): void {
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(vx, vy);
     // 将伤害值存到 Phaser 内置 Data 字典（不依赖 JS prototype chain）
     this.setData('damage', BULLET_DAMAGE);
+    // 弩箭朝向：向左飞则翻转，向右保持正向
+    if (vx < 0) {
+      this.setFlipX(true);
+    } else {
+      this.setFlipX(false);
+    }
+    // 斜向射击给箭矢加旋转角
+    if (vy !== 0 && vx !== 0) {
+      this.setAngle(Math.atan2(vy, vx) * (180 / Math.PI));
+    } else if (vy !== 0) {
+      this.setAngle(vy < 0 ? -90 : 90);
+    }
   }
 
   // ── 由 WeaponSystem.update() 每帧调用 ──────────────
