@@ -38,8 +38,14 @@ export class BootScene extends Phaser.Scene {
     // ── Tileset ─────────────────────────────────────
     this.load.image('tileset_l1', `${A}/tilesets/tileset_l1.png`);
 
-    // ── UI 组件包 ────────────────────────────────────
-    this.load.image('ui_kit', `${A}/ui/ui_kit.png`);
+    // ── UI 组件（预切片） ───────────────────────────────
+    this.load.image('ui_hp_bar',       `${A}/ui/ui_hp_bar.png`);
+    this.load.image('ui_hp_fill',      `${A}/ui/ui_hp_fill.png`);
+    this.load.image('ui_boss_hp_bar',  `${A}/ui/ui_boss_hp_bar.png`);
+    this.load.image('ui_boss_hp_fill', `${A}/ui/ui_boss_hp_fill.png`);
+    this.load.image('ui_weapon_panel', `${A}/ui/ui_weapon_panel.png`);
+    this.load.image('ui_dialog_box',   `${A}/ui/ui_dialog_box.png`);
+    this.load.image('ui_green_bar',    `${A}/ui/ui_green_bar.png`);
 
     // ── BGM（背景音乐，6 首） ────────────────────────
     this.load.audio('bgm_main_menu',       `${A}/audio/bgm/bgm_main_menu.wav`);

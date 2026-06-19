@@ -3,7 +3,7 @@
 // 当前进度：灰盒地图 + Player 移动跳跃
 // Batch 2 追加：WeaponSystem + 射击
 // Batch 3 追加：Enemy 实体（巡逻/追击/受击/死亡）
-// Batch 4 追加：CameraSystem + HUD（正式血条/冷却条/敌人计数/分数）
+// Batch 4 追加：CameraSystem（镜头跟随 + 死区）
 // Batch 5 追加：BossMengHuoL1 + Boss 血条 + Boss 触发/碰撞
 // Batch 6 追加：DialogSystem
 // Batch 8 追加：SaveSystem 串联 + 死亡/时间追踪
@@ -25,9 +25,7 @@ import type { DialogDataEntry } from '../systems/DialogSystem';
 import { EventBus } from '../core/EventBus';
 import { GameEvent } from '../types/events.types';
 import { DialogTrigger } from '../types/system.types';
-import { HUD } from '../ui/HUD';
-import { BossHealthBar } from '../ui/BossHealthBar';
-import { DialogBox } from '../ui/DialogBox';
+
 import { SaveSystem } from '../systems/SaveSystem';
 import { StorySystem } from '../systems/StorySystem';
 import { ScreenShake } from '../systems/ScreenShake';
@@ -68,9 +66,6 @@ export class Level1Scene extends Phaser.Scene {
   private cameraSys!: CameraSystem;
   private dialogSys!: DialogSystem;
   private captureSys!: CaptureSystem;
-  private hud!: HUD;
-  private bossHealthBar!: BossHealthBar;
-  private dialogBox!: DialogBox;
   private storySys!: StorySystem;
   private screenShake!: ScreenShake;
   private bus = EventBus.getInstance();
@@ -149,15 +144,13 @@ export class Level1Scene extends Phaser.Scene {
     this.setupCapture();      // 再创建 captureSys，setDialogSys 能拿到有效引用
     this.setupCollisions();
     this.setupEventListeners();
-    this.setupHUD();
-    this.setupBossHealthBar();
     this.setupStorySystem();     // Batch 9: 故事碎片
     this.setupScreenShake();     // Batch 9: 屏幕震动
     this.spawnFragment();        // Batch 9: 隐藏碎片放置
     this.setupAudio();           // Batch 11: 音频管理器初始化 + BGM
 
     this.bus.emit(GameEvent.LEVEL_START, { levelId: 'level_01' });
-    console.log('[Level1Scene] ✅ Batch 11 — 地图 + Player + 射击 + 敌人 + Camera + HUD + Boss + 对话 + 擒获 + SaveSystem + 碎片 + 震动 + AudioManager 就绪');
+    console.log('[Level1Scene] ✅ 地图 + Player + 射击 + 敌人 + Camera + Boss + 对话 + 擒获 + SaveSystem + 碎片 + 震动 + AudioManager 就绪');
     console.log('  WASD/方向键移动，Space/W/↑ 跳跃，J/Z 射击（八方向弩箭）');
     console.log(`  敌人数：${this._totalEnemies}`);
   }
@@ -221,7 +214,6 @@ export class Level1Scene extends Phaser.Scene {
         this._dialogActive = false;
         this.physics.resume();
         this.player.unlockFromCutscene();
-        this.dialogBox.hide();
         this.dialogSys.reset();
         this._dialogStuckTimer = 0;
         // 如果是擒获流程中，强制跳转结算
@@ -242,17 +234,8 @@ export class Level1Scene extends Phaser.Scene {
       this._dialogStuckTimer = 0;
     }
 
-    // 对话期间：只更新 DialogBox + HUD，暂停物理 + 输入 + 所有游戏逻辑
+    // 对话期间：暂停物理 + 输入 + 所有游戏逻辑
     if (this._dialogActive) {
-      this.dialogBox.update(delta);
-      this.hud.update({
-        hp: this.player.hp,
-        maxHp: this.player.maxHp,
-        cooldownPercent: this.weaponSys.cooldownPercent,
-        liveEnemies: this._liveEnemies,
-        totalEnemies: this._totalEnemies,
-        score: this._score,
-      });
       return;
     }
 
@@ -267,16 +250,7 @@ export class Level1Scene extends Phaser.Scene {
     );
     this.updateEnemies(delta);
     this.updateBoss(delta);
-    this.bossHealthBar.pulse(delta);
     this.cameraSys.update(delta);
-    this.hud.update({
-      hp: this.player.hp,
-      maxHp: this.player.maxHp,
-      cooldownPercent: this.weaponSys.cooldownPercent,
-      liveEnemies: this._liveEnemies,
-      totalEnemies: this._totalEnemies,
-      score: this._score,
-    });
   }
 
   // ─────────────────────────────────────────────────
@@ -690,14 +664,19 @@ export class Level1Scene extends Phaser.Scene {
 
     // ── 对话状态管理（Batch 6）─────────────────────
     // 🛡️ Batch 8 热修复: 使用计数器替代布尔 toggle，防多次 pause 导致 resume 失效
-    this.bus.on(GameEvent.DIALOG_START, (_payload) => {
+    // ⚠️ UI 已删除：DIALOG_START 后自动延迟推进 DIALOG_END（模拟跳过阅读）
+    this.bus.on(GameEvent.DIALOG_START, (payload) => {
+      const p = payload as { dialog: { id: string } };
       const wasActive = this._dialogActive;
       this._dialogActive = true;
       this.player.lockForCutscene();
-      // 仅在首次进入对话时暂停物理（防多次 pause 后单次 resume 无法恢复）
       if (!wasActive) {
         this.physics.pause();
       }
+      // UI 已删除 — 自动推进对话
+      this.time.delayedCall(1, () => {
+        this.bus.emit(GameEvent.DIALOG_END, { dialogId: p.dialog.id });
+      });
     });
 
     this.bus.on(GameEvent.DIALOG_END, (_payload) => {
@@ -820,11 +799,6 @@ export class Level1Scene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────
-  // HUD（Batch 4）
-  // ─────────────────────────────────────────────────
-  private setupHUD(): void {
-    this.hud = new HUD(this);
-  }
 
   // ─────────────────────────────────────────────────
   // Boss（Batch 5）
@@ -838,10 +812,6 @@ export class Level1Scene extends Phaser.Scene {
       speed: 60,
       scoreValue: 500,   // 击败 Boss 获得 500 分
     });
-  }
-
-  private setupBossHealthBar(): void {
-    this.bossHealthBar = new BossHealthBar(this);
   }
 
   // ─────────────────────────────────────────────────
@@ -957,9 +927,6 @@ export class Level1Scene extends Phaser.Scene {
     this.dialogSys = new DialogSystem();
     this.dialogSys.load(dialogs);
 
-    // 创建对话框 UI
-    this.dialogBox = new DialogBox(this);
-
     // 延迟播放开场对话（等场景渲染一帧后再触发）
     this.time.delayedCall(300, () => {
       this.dialogSys.triggerByEvent(DialogTrigger.LEVEL_INTRO);
@@ -1001,9 +968,6 @@ export class Level1Scene extends Phaser.Scene {
     try { this.inputMgr?.destroy(); } catch (e) { console.error('[Level1Scene] inputMgr.destroy 异常:', e); }
     try { this.weaponSys?.destroy(); } catch (e) { console.error('[Level1Scene] weaponSys.destroy 异常:', e); }
     try { this.cameraSys?.destroy(); } catch (e) { console.error('[Level1Scene] cameraSys.destroy 异常:', e); }
-    try { this.hud?.destroy(); } catch (e) { console.error('[Level1Scene] hud.destroy 异常:', e); }
-    try { this.bossHealthBar?.destroy(); } catch (e) { console.error('[Level1Scene] bossHealthBar.destroy 异常:', e); }
-    try { this.dialogBox?.destroy(); } catch (e) { console.error('[Level1Scene] dialogBox.destroy 异常:', e); }
     try { this.dialogSys?.reset(); } catch (e) { console.error('[Level1Scene] dialogSys.reset 异常:', e); }
     try { this.captureSys?.reset(); } catch (e) { console.error('[Level1Scene] captureSys.reset 异常:', e); }
     try { this.enemyGroup?.destroy(true); } catch (e) { console.error('[Level1Scene] enemyGroup.destroy 异常:', e); }

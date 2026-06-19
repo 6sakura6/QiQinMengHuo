@@ -1,8 +1,8 @@
 # Phase 3 美术资源 → 第1关 逐步替换流程
 
-> **文档版本**: 2.0（经代码审查修订）  
+> **文档版本**: 2.1（步骤6 UI 重构）  
 > **创建日期**: 2026-06-19  
-> **修订日期**: 2026-06-19（v2.0 修正 4 个 P0 技术错误 + 4 个 P1 遗漏）  
+> **修订日期**: 2026-06-19（v2.1: 步骤6 完全重写 — 修复 HUD 双血条 Bug、对话框错位、组件精细度不足）  
 > **目标**: 将 `docs/phase3/assets/` 中的 v2 美术资源逐步集成到 `src/` Phase 2 代码中，替换第1关所有灰盒占位  
 > **前置条件**: Phase 3 资源已验收（77项通过），P0 问题已修复（manifest v2 + RGBA 透明通道）
 
@@ -383,76 +383,119 @@ if (this.scene.textures.exists('boss_menghuo')) {
 
 ---
 
-### 步骤 6: 替换 HUD + UI（Python 预切片方案） ⭐⭐⭐ 较高
+### 步骤 6: 替换 HUD + UI（v2.0 修正版） ⭐⭐⭐ 较高
 
-**当前状态**: HUD 用 Graphics API 画矩形（血条红绿、冷却条灰橙），DialogBox 用 `rexUI` 或类似方法
+**当前状态**: HUD、BossHealthBar、DialogBox 均已完成 v2.0 重构。代码同时支持纹理渲染和 Graphics fallback。
 
-**⚠️ v1 版的 `setCrop` 方案是错误的**: Phaser 的 `setCrop` 是裁剪 Image 的可见区域，不是从大图里提取子纹理。按 setCrop 写法会把整张 1024×943 的 UI 图放在 HUD 位置然后只显示一小块——坐标和缩放全乱。
+**⚠️ v2.0 核心改进**（修复了 v1 的三大问题）:
 
-**正确方案: Python 预切片为独立 PNG**
+1. **"血条变两个"Bug 修复**: v1 用同一张 `ui_hp_bar` 纹理同时创建 frame 和 fill，导致双层叠加 → 视觉上出现两条血条。v2 改为: `ui_hp_bar` 仅作装饰框架，`ui_hp_fill` 独立图片作填充条，两者通过动态纹理尺寸精确定位叠加。
+2. **对话框错位修复**: v1 将 709×362 的对话框纹理强制拉伸到 640×130，严重变形。v2 按纹理宽高比动态计算显示尺寸，保形缩放。
+3. **精细度提升**: 全部 UI 组件增加 Graphics fallback 路径（纹理缺失时自动绘制像素风替代），对话框头像从纯色矩形升级为双层边框+纹理装饰的像素绘制。
 
-**UI 精灵表布局**（来自 manifest）:
+#### 6a. 资源清单（已完成切片）
 
-| 组件 | 坐标 (x,y) | 尺寸 (w×h) | 输出文件名 |
-|------|-----------|-----------|-----------|
-| player_hp_bar | (24, 24) | 200×24 | `ui_hp_bar.png` |
-| boss_hp_bar | (250, 20) | 780×44 | `ui_boss_hp_bar.png` |
-| dialog_box | (80, 500) | 1120×150 | `ui_dialog_box.png` |
-| weapon_panel | (960, 585) | 280×105 | `ui_weapon_panel.png` |
+| 文件 | 实际尺寸 | 用途 | 加载 key |
+|------|---------|------|----------|
+| `ui_hp_bar.png` | 342×174 | 玩家血条装饰框 | `ui_hp_bar` |
+| `ui_hp_fill.png` | 235×37 | 玩家血条绿色填充条 | `ui_hp_fill` |
+| `ui_boss_hp_bar.png` | 564×174 | Boss 血条装饰框 | `ui_boss_hp_bar` |
+| `ui_boss_hp_fill.png` | 555×40 | Boss 血条填充条 | `ui_boss_hp_fill` |
+| `ui_dialog_box.png` | 709×362 | 对话框纹理背景 | `ui_dialog_box` |
+| `ui_weapon_panel.png` | 188×362 | 武器面板 | `ui_weapon_panel` |
+| `ui_green_bar.png` | 235×47 | 冷却条 | `ui_green_bar` |
 
-**切片脚本**（在步骤 1 拷贝后运行）:
+#### 6b. BootScene 加载（已实现）
 
-```python
-from PIL import Image
-from pathlib import Path
-
-ui_kit = Image.open("public/assets/ui/ui_kit.png")
-
-regions = [
-    ("ui_hp_bar",       24,  24,  200, 24),
-    ("ui_boss_hp_bar",  250, 20,  780, 44),
-    ("ui_dialog_box",   80,  500, 1120, 150),
-    ("ui_weapon_panel", 960, 585, 280, 105),
-]
-
-out_dir = Path("public/assets/ui")
-for name, x, y, w, h in regions:
-    crop = ui_kit.crop((x, y, x + w, y + h))
-    crop.save(out_dir / f"{name}.png", "PNG", optimize=True)
-    print(f"  {name}.png: {w}x{h} -> {crop.size}")
-```
-
-**BootScene.preload() 追加**:
+所有 UI 纹理在 `BootScene.preload()` 中集中加载:
 
 ```typescript
-// UI 组件（预切片后的独立文件）
 this.load.image('ui_hp_bar',       `${A}/ui/ui_hp_bar.png`);
+this.load.image('ui_hp_fill',      `${A}/ui/ui_hp_fill.png`);
 this.load.image('ui_boss_hp_bar',  `${A}/ui/ui_boss_hp_bar.png`);
-this.load.image('ui_dialog_box',   `${A}/ui/ui_dialog_box.png`);
+this.load.image('ui_boss_hp_fill', `${A}/ui/ui_boss_hp_fill.png`);
 this.load.image('ui_weapon_panel', `${A}/ui/ui_weapon_panel.png`);
+this.load.image('ui_dialog_box',   `${A}/ui/ui_dialog_box.png`);
+this.load.image('ui_green_bar',    `${A}/ui/ui_green_bar.png`);
 ```
 
-**HUD 修改** (`src/ui/HUD.ts`): 将 Graphics 矩形替换为 Image + 裁剪宽度实现血量变化:
+#### 6c. HUD 血条正确实现模式
+
+> **关键原则**: 装饰框（frame）和血量填充条（fill）是**两张不同的纹理**，必须分别定位。
 
 ```typescript
-// 血条背景
-const hpBg = scene.add.image(HP_BAR_X, HP_BAR_Y, 'ui_hp_bar')
-  .setOrigin(0, 0).setScrollFactor(0).setDepth(100);
-// 血条前景（用 setDisplaySize 按比例缩放宽度）
-const hpFill = scene.add.image(HP_BAR_X, HP_BAR_Y, 'ui_hp_bar')
-  .setOrigin(0, 0).setScrollFactor(0).setDepth(101)
-  .setCrop(0, 0, HP_BAR_W, HP_BAR_H);  // 初始满血
+// 1. 动态读取纹理实际尺寸（不要硬编码！）
+const frameTex = scene.textures.get('ui_hp_bar');
+const fillTex  = scene.textures.get('ui_hp_fill');
+const fSrcW = frameTex.source[0].width;   // 342
+const fSrcH = frameTex.source[0].height;  // 174
+const flSrcW = fillTex.source[0].width;   // 235
+const flSrcH = fillTex.source[0].height;  // 37
 
-// 更新血量时:
-updateHp(currentHp: number, maxHp: number): void {
-  const ratio = currentHp / maxHp;
-  hpFill.setDisplaySize(HP_BAR_W * ratio, HP_BAR_H);
+// 2. 定义显示尺寸，计算独立 X/Y 缩放因子
+const frameDispW = 190;
+const scaleX = frameDispW / fSrcW;
+const frameDispH = Math.round(fSrcH * scaleX);
+const scaleY = frameDispH / fSrcH;   // ⚠️ 独立 Y 缩放！不要复用 scaleX！
+
+// 3. 计算 fill 在 frame 内的精确定位
+const fillSrcX = Math.round((fSrcW - flSrcW) / 2);  // fill 在帧中水平居中
+const fillSrcY = 64;  // fill 在帧纹理中的 Y 偏移（从设计图测量）
+
+const fillX = frameX + Math.round(fillSrcX * scaleX);
+const fillY = frameY + Math.round(fillSrcY * scaleY);  // ⚠️ 用 scaleY 不是 scaleX！
+const fillDispW = Math.round(flSrcW * scaleX);
+const fillDispH = Math.round(flSrcH * scaleY);
+
+// 4. 创建 frame（装饰框，始终满尺寸）
+scene.add.image(frameX, frameY, 'ui_hp_bar')
+  .setOrigin(0, 0).setScrollFactor(0).setDepth(200)
+  .setDisplaySize(frameDispW, frameDispH);
+
+// 5. 创建 fill（绿色填充条，定位在 frame 内的 bar 区域）
+const fillImg = scene.add.image(fillX, fillY, 'ui_hp_fill')
+  .setOrigin(0, 0).setScrollFactor(0).setDepth(201)
+  .setDisplaySize(fillDispW, fillDispH);
+
+// 6. 血量更新时 crop + displaySize 联动
+function updateHp(pct: number): void {
+  const cropW = Math.max(1, Math.round(flSrcW * pct));
+  fillImg.setCrop(0, 0, cropW, flSrcH);
+  fillImg.setDisplaySize(Math.max(1, Math.round(fillDispW * pct)), fillDispH);
 }
 ```
 
-> **⚠️ 为什么 `setDisplaySize` 可以而 `setCrop` 不行**: `setDisplaySize` 缩放整个 Image 的显示尺寸，适合做血条缩短效果。`setCrop` 是裁剪可见区域但不改变 Image 在场景中的定位锚点，用于从大图提取子纹理是错误用法。
+#### 6d. Graphics Fallback 策略
 
-**建议**: 这一步**单独作为一个子批次**，不和其他步骤混做。
+当任意 UI 纹理缺失时，组件自动降级为 `Phaser.GameObjects.Graphics` 绘制:
+
+```typescript
+// 纹理检查 → 选择渲染路径
+const hasFrame = scene.textures.exists('ui_hp_bar');
+const hasFill  = scene.textures.exists('ui_hp_fill');
+if (hasFrame && hasFill) {
+  // 纹理路径：Image + crop
+} else {
+  // fallback 路径：Graphics API 画像素风矩形
+  const gfx = scene.add.graphics();
+  gfx.fillStyle(0x44cc44, 0.95);
+  gfx.fillRect(x, y, w * pct, h);
+  // 添加像素纹理线提升精细度
+  gfx.fillStyle(0xffffff, 0.06);
+  for (let ly = y + 4; ly < y + h; ly += 6) {
+    gfx.fillRect(x, ly, w * pct, 1);
+  }
+}
+```
+
+#### 6e. 验证标准
+
+- [ ] 玩家血条: frame（装饰框）+ fill（绿色填充条）精确叠加 → 只看到**一条**血条
+- [ ] 血条减少时从右向左裁剪，不出现拉伸或双重影像
+- [ ] Boss 血条: 顶部居中，frame+fill 精确对齐
+- [ ] 对话框: 底部居中，纹理保形缩放不严重变形
+- [ ] 所有 UI 组件在纹理缺失时自动降级为 Graphics 像素风渲染（不会白屏/报错）
+- [ ] 冷却条/武器面板: 位置在血条下方，间距一致
 
 ---
 
