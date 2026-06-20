@@ -784,19 +784,39 @@ export class MainMenuScene extends Phaser.Scene {
   // ================================================================
   // 场景跳转
   // ================================================================
-  private startGame(): void {
-    this.cameras.main.fadeOut(350, 15, 19, 26);
-    this.time.delayedCall(370, () => {
+  // ── 场景跳转（事件驱动，消除 delayedCall 时序竞争）──
+  private transitionToGame(): void {
+    // 🔧 BUGFIX: 使用 camerafadeoutcomplete 替代 delayedCall(370)
+    //   根因：delayedCall 基于帧循环，在低帧率/资源加载时可能延迟超过 fadeOut 时间，
+    //   导致 fade 完成后有纯黑间隙。事件驱动确保 fadeOut 完成瞬间即切场景。
+    this.inputLocked = true;
+    let transitioned = false;
+
+    const doTransition = () => {
+      if (transitioned) return;
+      transitioned = true;
       this.scene.start('Level1Scene');
+    };
+
+    this.cameras.main.fadeOut(350, 15, 19, 26);
+    this.cameras.main.once('camerafadeoutcomplete', doTransition);
+
+    // 🛡️ 安全网：600ms 兜底（防止事件永不触发导致的永久黑屏）
+    this.time.delayedCall(600, () => {
+      if (!transitioned) {
+        console.warn('[MainMenuScene] ⚠️ camerafadeoutcomplete 未触发，安全网兜底跳转');
+        doTransition();
+      }
     });
+  }
+
+  private startGame(): void {
+    this.transitionToGame();
   }
 
   private continueGame(): void {
     if (!this.hasSaveData) return;
-    this.cameras.main.fadeOut(350, 15, 19, 26);
-    this.time.delayedCall(370, () => {
-      this.scene.start('Level1Scene');
-    });
+    this.transitionToGame();
   }
 
   // ================================================================

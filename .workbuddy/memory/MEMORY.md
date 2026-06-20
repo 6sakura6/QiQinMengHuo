@@ -156,3 +156,16 @@
 - 文件：七擒孟获-像素三国视觉概念
 - 配色：Primary #DC2626 / Background #0F172A / Accent #22C55E
 - 字体：Press Start 2P (标题) + VT323 (正文)
+
+## Phaser 开发踩坑记录
+
+### `scene.anims.play()` 参数顺序（重要！）
+- `AnimationManager.play(key, children)` — **key 在前，sprite 在后**
+- `sprite.play(key)` — 精灵自身的 play 方法，只需 key
+- `sprite.anims.play(key)` — Animation 组件的 play 方法，只需 key
+- **教训**：不要用 `scene.anims.play(sprite, key)` — 参数反了会静默失败，动画卡在初始状态
+
+### Phaser 纹理缓存
+- 更新 PNG 后必须 `this.textures.remove('textureKey')` 清除旧缓存
+- spritesheet 帧名是字符串 "0"~"7"，不是数字索引
+- `generateFrameNumbers()` 有 `__BASE` 帧偏移陷阱，建议直接用 `{ key, frame: String(i) }` 构造帧

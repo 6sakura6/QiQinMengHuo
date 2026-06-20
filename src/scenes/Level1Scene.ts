@@ -106,14 +106,25 @@ export class Level1Scene extends Phaser.Scene {
   // preload — Batch 1：用程序生成灰盒贴图，不依赖外部文件
   // ─────────────────────────────────────────────────
   preload(): void {
-    // 在 create 阶段用 generateTexture 代替真实精灵
-    // 无需 load 任何文件
+    // ── 真实玩家精灵图（8帧跑动+射击，330×283/帧）─────────
+    // 🔧 强制清除旧纹理缓存，确保每次都加载最新 PNG
+    if (this.textures.exists('player_sheet')) {
+      this.textures.remove('player_sheet');
+    }
+    this.load.spritesheet('player_sheet', 'sprites/player_run.png', {
+      frameWidth: 330,
+      frameHeight: 283,
+    });
   }
 
   // ─────────────────────────────────────────────────
   // create — 组装场景
   // ─────────────────────────────────────────────────
   create(): void {
+    // 🔧 BUGFIX: 从 MainMenuScene fadeOut 过渡过来时，确保平滑淡入
+    //   使用与游戏天空底色一致的深蓝 (#0F172A) 作为 fadeIn 颜色
+    this.cameras.main.fadeIn(300, 15, 23, 42);
+
     // ⚠️ CRITICAL: 重置实例状态 — Phaser 的 scene.restart() 不重置类字段！
     //    如果不重置，_bossSpawned 在死亡重启后仍为 true → Boss 永远不会激活
     this._bossSpawned  = false;
@@ -478,7 +489,10 @@ export class Level1Scene extends Phaser.Scene {
     // ═══════════════════════════════════════
     // 游戏实体：逐帧动画纹理（30fps 精灵动画）
     // ═══════════════════════════════════════
-    this.buildPlayerFrames(genTex);
+    // 🔥 玩家使用真实精灵图时，跳过程序帧生成（preload 已加载 player_sheet）
+    if (!this.textures.exists('player_sheet')) {
+      this.buildPlayerFrames(genTex);
+    }
     this.buildEnemyFrames(genTex);
     this.buildBossFrames(genTex);
     genTex('bullet_placeholder', 12, 6, (g) => { this.drawCrossbowBolt(g); });
@@ -501,14 +515,60 @@ export class Level1Scene extends Phaser.Scene {
       this.anims.create({ key, frames, frameRate: rate, repeat });
     };
 
-    // ── 玩家动画 (30fps ÷ 2~4f 每帧 = 8~15fps 精灵帧率) ──
-    makeAnim('player_idle',  'player_idle',  4, 8);
-    makeAnim('player_run',   'player_run',   6, 12);
-    makeAnim('player_jump',  'player_jump',  2, 8, 0);
-    makeAnim('player_fall',  'player_fall',  2, 8, 0);
-    makeAnim('player_shoot', 'player_shoot', 3, 15, 0);
-    makeAnim('player_hurt',  'player_hurt',  2, 10, 0);
-    makeAnim('player_death', 'player_death', 4, 8, 0);
+    const useRealSheet = this.textures.exists('player_sheet');
+
+    // 🔧 强制清除所有旧 player 动画（防止引用过期帧数据）
+    ['player_idle', 'player_run', 'player_jump', 'player_fall',
+     'player_shoot', 'player_hurt', 'player_death'].forEach(k => {
+      if (this.anims.exists(k)) this.anims.remove(k);
+    });
+
+    if (useRealSheet) {
+      // ── 真实精灵图动画（8帧 spritesheet，复用到各状态）──
+      // 🔧 关键：spritesheet 帧名是 "0"~"7"（字符串），不是索引
+      //    必须用 { start: 0, end: 7 } 而不是 { start: 1, end: 8 }
+      const sheetKey = 'player_sheet';
+
+      // 🛡️ 防御式帧引用：直接用帧名字符串，避开 generateFrameNumbers 的全部陷阱
+      const mkFrame = (i: number): { key: string; frame: string } => ({
+        key: sheetKey,
+        frame: String(i),
+      });
+
+      /** 从自定义帧索引创建动画 */
+      const animFromIndices = (
+        animKey: string, indices: number[], rate: number, rep = -1,
+      ) => {
+        if (this.anims.exists(animKey)) this.anims.remove(animKey);
+        const frames = indices.map(mkFrame);
+        this.anims.create({ key: animKey, frames, frameRate: rate, repeat: rep });
+      };
+
+      // idle: [0,0,1,1] 呼吸微动（慢速 4fps）
+      animFromIndices('player_idle', [0, 0, 1, 1], 4);
+      // run: 全8帧循环 (12fps)
+      animFromIndices('player_run',  [0, 1, 2, 3, 4, 5, 6, 7], 12);
+      // jump: 取腾空帧 [3,4]
+      animFromIndices('player_jump', [3, 4], 8, 0);
+      // fall: 取下落帧 [5,6]
+      animFromIndices('player_fall', [5, 6], 8, 0);
+      // shoot: [0,0,7] 瞄准→发射→复位
+      animFromIndices('player_shoot',[0, 0, 7], 12, 0);
+      // hurt: [0,2] 受击趔趄
+      animFromIndices('player_hurt', [0, 2], 10, 0);
+      // death: [4,6,7,7] 倒地→消逝
+      animFromIndices('player_death',[4, 6, 7, 7], 6, 0);
+    } else {
+      // ── 灰盒 fallback：程序生成纹理 ──
+      // ── 玩家动画 (30fps ÷ 2~4f 每帧 = 8~15fps 精灵帧率) ──
+      makeAnim('player_idle',  'player_idle',  4, 8);
+      makeAnim('player_run',   'player_run',   6, 12);
+      makeAnim('player_jump',  'player_jump',  2, 8, 0);
+      makeAnim('player_fall',  'player_fall',  2, 8, 0);
+      makeAnim('player_shoot', 'player_shoot', 3, 15, 0);
+      makeAnim('player_hurt',  'player_hurt',  2, 10, 0);
+      makeAnim('player_death', 'player_death', 4, 8, 0);
+    }
 
     // ── 蛮兵动画 ──
     makeAnim('enemy_idle',  'enemy_idle',  2, 6);

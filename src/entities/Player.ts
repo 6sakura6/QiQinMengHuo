@@ -35,14 +35,32 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   // ─────────────────────────────────────────────────
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    // 先用 fallback key；美术资源到位后改 'player'
-    super(scene, x, y, 'player_idle_0');
+    // 🔧 修复：Phaser spritesheet 的正确引用方式是 (textureKey, frameIndex)
+    //   'player_sheet_0' 不是有效纹理名，必须用 'player_sheet' + frame 0
+    //   TypeScript 不允许 super 在 if/else 中，所以先计算参数
+    const [texKey, frame] = scene.textures.exists('player_sheet')
+      ? ['player_sheet', 0] as const
+      : ['player_idle_0', undefined] as const;
+    super(scene, x, y, texKey, frame);
     scene.add.existing(this as unknown as Phaser.GameObjects.GameObject);
     scene.physics.add.existing(this as unknown as Phaser.GameObjects.GameObject);
 
+    // 真实精灵图 330×283 → 缩放到合理游戏尺寸（约 72×62 显示）
+    // 灰盒 24×40 保持原始比例
+    if (scene.textures.exists('player_sheet')) {
+      this.setScale(0.22);  // 330×283 × 0.22 ≈ 73×62 像素
+    }
+
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(24, 40);          // 碰撞盒（比精灵小，手感更好）
-    body.setOffset(4, 8);
+    // 碰撞盒适配（纹理坐标系，scale 0.22 后自动缩放）
+    // 灰盒：24×40 offset(4,8)
+    // 真精灵：纹理 330×283，角色脚部 y≈265，水平中心 x≈164
+    //   → 碰撞盒 109×182 offset(110,83)
+    //   → scale 0.22 后世界尺寸 24×40，底部对齐脚部
+    const bw = scene.textures.exists('player_sheet') ? 109 : 24;
+    const bh = scene.textures.exists('player_sheet') ? 182 : 40;
+    body.setSize(bw, bh);
+    body.setOffset(scene.textures.exists('player_sheet') ? 110 : 4, scene.textures.exists('player_sheet') ? 83 : 8);
     body.setMaxVelocityX(PLAYER_SPEED);
     body.setGravityY(0);           // 由世界重力提供，不再单独设置
     this.setDepth(10);
@@ -145,8 +163,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // 播放逐帧动画（30fps 精灵动画）
     const animKey = `player_${next}`;
-    if (this.anims.exists(animKey)) {
-      this.anims.play(animKey);
+    // 🔧 根因修复：必须用 scene.anims.exists() 检查全局动画管理器！
+    //   sprite.anims.exists() 检查的是精灵专属动画（this.anims 是 null，
+    //   除非用 sprite.anims.create() 创建），所以永远返回 false，
+    //   导致 this.play() 从未被调用 → 动画卡在 idle [0,0,1,1] = 只有2帧
+    if (this.scene.anims.exists(animKey)) {
+      this.play(animKey);
     }
 
     // 更新闪烁效果（无敌状态）
