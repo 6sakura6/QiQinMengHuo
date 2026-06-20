@@ -70,8 +70,12 @@ export class MainMenuScene extends Phaser.Scene {
   // create — 主入口：11 层视觉元素 + 菜单交互
   // ================================================================
   create(): void {
+    try {
     // ─── 第 1 层：夜空底色 ──────────────────────────────
     this.cameras.main.setBackgroundColor('#0F172A');
+
+    // 🔧 fadeIn 确保从其他场景过渡时平滑显示
+    this.cameras.main.fadeIn(200, 15, 19, 26);
 
     // ─── 第 2 层：血月 + 像素云 ─────────────────────────
     this.drawBloodMoon();
@@ -116,6 +120,10 @@ export class MainMenuScene extends Phaser.Scene {
         this.confirmResetTimer = undefined;
       }
     });
+
+    } catch (e) {
+      console.error('[MainMenuScene] ❌ create() 异常:', e);
+    }
   }
 
   // ================================================================
@@ -576,6 +584,10 @@ export class MainMenuScene extends Phaser.Scene {
     const saveSys = SaveSystem.getInstance();
     this.hasSaveData = saveSys.hasAnyProgress();
 
+    // 🔧 防御: 清除旧引用（scene.restart 可能复用实例导致 optionTexts 残留已销毁对象）
+    this.optionTexts = [];
+    this.optionBgGraphics = [];
+
     // ── 菜单选项定义 ──
     const baseY = 320;
     const spacing = 56;
@@ -697,6 +709,7 @@ export class MainMenuScene extends Phaser.Scene {
     }
 
     this.optionTexts.forEach((txt, i) => {
+      if (!txt) return;
       txt.setInteractive({ useHandCursor: true });
       txt.on('pointerover', () => {
         if (!this._awaitingResetConfirm) this.moveToIndex(i);
@@ -730,6 +743,7 @@ export class MainMenuScene extends Phaser.Scene {
     });
 
     this.optionTexts.forEach((txt, i) => {
+      if (!txt) return;
       const disabled = i === 1 && !this.hasSaveData;
       if (disabled) {
         txt.setColor('#475569');

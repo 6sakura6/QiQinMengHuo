@@ -35,7 +35,7 @@ export class BootScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const sub = this.add
-      .text(width / 2, height / 2 + 24, 'Phase 2 · 加载中…', {
+      .text(width / 2, height / 2 + 24, '加载中…', {
         fontFamily: '"VT323", monospace',
         fontSize: '18px',
         color: '#667788',

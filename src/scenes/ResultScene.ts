@@ -38,12 +38,19 @@ export class ResultScene extends Phaser.Scene {
   private _saveSys = SaveSystem.getInstance();
   private _selectedIndex = 0;
   private _menuItems: { text: Phaser.GameObjects.Text; action: () => void }[] = [];
+  private _transitioning = false;     // 🛡️ 防止重复切换场景
+  private _transitionTarget = '';     // 🔧 跳转目标场景 key
+  private _transitionDeadline = 0;    // 🔧 跳转截止时间戳（ms）
 
   constructor() {
     super({ key: 'ResultScene' });
   }
 
   create(raw?: Record<string, unknown>): void {
+    // 重置过渡标记（scene.restart 场景复用时需要）
+    this._transitioning = false;
+    this._transitionTarget = '';
+    this._transitionDeadline = 0;
     const { width: W, height: H } = this.cameras.main;
 
     // 解析传入数据
@@ -154,8 +161,9 @@ export class ResultScene extends Phaser.Scene {
       nextBg.strokeRect(btnX - 130, btnY - 18, 260, 36);
 
       const nextBtn = this.createMenuItem(btnX, btnY, `下一关: ${nextName}`, () => {
+        if (this._transitioning) return;
         this._saveSys.unlockLevel(this._data.nextLevelId!);
-        this.scene.start('Level1Scene');
+        this.scheduleTransition('Level1Scene');
       });
       this._menuItems.push(nextBtn);
     }
@@ -169,7 +177,9 @@ export class ResultScene extends Phaser.Scene {
     menuBg.strokeRect(W / 2 - 110, menuBtnY - 16, 220, 32);
 
     const menuBtn = this.createMenuItem(W / 2, menuBtnY, '返回主菜单', () => {
-      this.scene.start('MainMenuScene');
+
+      this.goToMainMenu();
+
     });
     this._menuItems.push(menuBtn);
 
@@ -201,26 +211,36 @@ export class ResultScene extends Phaser.Scene {
     });
 
     // ── 键盘操控 ──────────────────────────────────
-    this.input.keyboard?.on('keydown-UP', () => {
+    const onKbUp = () => {
+      if (this._transitioning) return;
       if (this._menuItems.length > 1) {
         this._selectedIndex = Math.max(0, this._selectedIndex - 1);
         this.updateSelection();
       }
-    });
-
-    this.input.keyboard?.on('keydown-DOWN', () => {
+    };
+    const onKbDown = () => {
+      if (this._transitioning) return;
       if (this._menuItems.length > 1) {
         this._selectedIndex = Math.min(this._menuItems.length - 1, this._selectedIndex + 1);
         this.updateSelection();
       }
-    });
-
-    this.input.keyboard?.on('keydown-ENTER', () => {
+    };
+    const onKbConfirm = () => {
+      if (this._transitioning) return;
       this._menuItems[this._selectedIndex]?.action();
-    });
+    };
 
-    this.input.keyboard?.on('keydown-SPACE', () => {
-      this._menuItems[this._selectedIndex]?.action();
+    this.input.keyboard?.on('keydown-UP',    onKbUp);
+    this.input.keyboard?.on('keydown-DOWN',  onKbDown);
+    this.input.keyboard?.on('keydown-ENTER', onKbConfirm);
+    this.input.keyboard?.on('keydown-SPACE', onKbConfirm);
+
+    // shutdown 清理：防止键盘监听器残留到下一个场景造成卡死
+    this.events.once('shutdown', () => {
+      this.input.keyboard?.off('keydown-UP',    onKbUp);
+      this.input.keyboard?.off('keydown-DOWN',  onKbDown);
+      this.input.keyboard?.off('keydown-ENTER', onKbConfirm);
+      this.input.keyboard?.off('keydown-SPACE', onKbConfirm);
     });
 
     // 初始高亮
@@ -250,6 +270,38 @@ export class ResultScene extends Phaser.Scene {
     text.on('pointerdown', action);
 
     return { text, action };
+  }
+
+  // ── 场景跳转（fadeOut + delayedCall + update 安全网）─────
+  private scheduleTransition(target: string): void {
+    if (this._transitioning) return;
+    this._transitioning = true;
+    this._transitionTarget = target;
+    this._transitionDeadline = this.time.now + 500;
+
+    this.cameras.main.fadeOut(300, 15, 19, 26);
+    this.time.delayedCall(350, () => {
+      this.executeTransition();
+    });
+  }
+
+  private executeTransition(): void {
+    if (!this._transitionTarget) return;
+    const target = this._transitionTarget;
+    this._transitionTarget = '';
+    this.scene.start(target);
+  }
+
+  private goToMainMenu(): void {
+    this.scheduleTransition('MainMenuScene');
+  }
+
+  // ── update 安全网: delayedCall 未触发时的兜底 ─────
+  update(): void {
+    if (this._transitionTarget && this.time.now > this._transitionDeadline) {
+      console.warn('[ResultScene] ⚠️ 安全网: 超时未跳转，强制执行');
+      this.executeTransition();
+    }
   }
 
   // ── 高亮更新（Phase 3 绿色光标色）───────────────
