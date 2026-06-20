@@ -8,6 +8,7 @@
 
 import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem';
+import { AudioManager, BGM, SFX } from '../systems/AudioManager';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/constants';
 
 // ─── 设计系统颜色（Phase 3 像素三国规范）───────────────
@@ -104,6 +105,9 @@ export class MainMenuScene extends Phaser.Scene {
 
     // ─── 交互层：菜单按钮 + 光标 + 版本 ──────────────
     this.buildMenuSystem();
+
+    // ─── 音频：初始化并播放主菜单 BGM ──────────────
+    this.setupAudio();
 
     // ─── 控制：键盘 + 鼠标 ────────────────────────────
     this.setupInput();
@@ -602,6 +606,16 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   // ================================================================
+  // 音频初始化
+  // ================================================================
+  private setupAudio(): void {
+    const audioMgr = AudioManager.getInstance();
+    audioMgr.init(this);
+    audioMgr.playBgm(BGM.MAIN_MENU);
+    console.log('[MainMenuScene] 🎵 BGM 主菜单启动');
+  }
+
+  // ================================================================
   // 交互层：菜单系统
   // ================================================================
   private buildMenuSystem(): void {
@@ -766,6 +780,9 @@ export class MainMenuScene extends Phaser.Scene {
       ease: 'Back.easeOut',
     });
 
+    // 🔊 菜单切换音效
+    AudioManager.getInstance().playSfx(SFX.MENU_SELECT);
+
     this.optionTexts.forEach((txt, i) => {
       if (!txt) return;
       const disabled = i === 1 && !this.hasSaveData;
@@ -801,7 +818,11 @@ export class MainMenuScene extends Phaser.Scene {
       scaleY: 0.92,
       yoyo: true,
       duration: 80,
-      onComplete: () => opt.action(),
+      onComplete: () => {
+        // 🔊 确认音效
+        AudioManager.getInstance().playSfx(SFX.MENU_CONFIRM);
+        opt.action();
+      },
     });
   }
 

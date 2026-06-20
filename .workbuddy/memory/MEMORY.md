@@ -113,7 +113,7 @@
 | **SaveSystem** | LocalStorage 存取 | 完整 |
 | **StorySystem** | 碎片收集/图鉴 | 基础（1个碎片） |
 | **CameraSystem** | 镜头跟随/锁镜头 | 完整 |
-| **AudioManager** | 音效播放（含空实现占位） | 基础 |
+| **AudioManager** | 自适应音乐+SFX引擎+空间音频（v2专业级） | 完整 |
 | **ScreenShake** | 屏幕震动 | 完整 |
 
 ### 第4层 — Entities（实体层，3个模块）
@@ -151,7 +151,49 @@
 3. **配置化**：地图/敌人/Boss 行为全部从 JSON 加载，不硬编码
 4. **AI fallback**：AI 台词有本地模板兜底，不允许 API 阻塞主流程
 
-## Ardot 设计
+## 音频系统 v2（2026-06-20 专业升级）
+
+> 设计文档：`docs/phase2/audio-design.md` | 实现：`src/systems/AudioManager.ts`（900+行）
+> Sonic Identity：磅礴·智谋·渐悟
+
+### 核心架构
+- **4层自适应BGM**：CombatIntensity(0-1) → L0探索/L1交战/L2 Boss/L3擒获主题自动交叉淡入淡出
+- **4总线架构**：Master / BGM / SFX / UI，独立音量+静音控制
+- **语音数管理**：3级优先级(SfxPriority)，硬上限32路，超限按优先级偷取
+- **空间音频**：stereo pan + 4段距离衰减(200/400/600px)
+- **诊断工具**：`getDiagnostics()` / `dumpDiagnostics()` 实时调试
+- **向后兼容**：v1.0 所有API(playBgm/playSfx/stopBgm等)完全保留
+
+### 关键API
+```typescript
+// 自适应BGM（Level1Scene已接入）
+audioMgr.startAdaptiveBgm({ exploreKey, combatKey, bossKey, captureKey });
+audioMgr.setCombatIntensity(0.0-1.0);  // 每帧由updateAudioIntensity()调用
+audioMgr.triggerCaptureTheme();         // Boss被擒时触发
+
+// 空间音效
+audioMgr.playSfxAt(SFX.ENEMY_DEATH, x, y);
+
+// 环境音
+audioMgr.playAmbience(AMBIENCE.PLAIN_WIND, 0.25);
+```
+
+### 资源清单
+- BGM: 24首 (7关×2 + 通用) | SFX: 30+ | 环境音: 7
+- **当前实现**：程序化合成（ProceduralAudio），零外部文件依赖
+- 格式: WebM(Vorbis)/MP3（外部文件方案）| Web Audio API 实时合成（当前方案）
+- 加载策略: BootScene 异步合成 → 注册到 Phaser 音频缓存 → AudioManager 透明使用
+
+### 程序化音频合成引擎（2026-06-20）
+> 实现：`src/systems/ProceduralAudio.ts`（~900行）
+> 零外部音频文件，全部 Web Audio API 实时合成
+
+- **合成技术**：OfflineAudioContext → OscillatorNode + GainNode 包络 + BiquadFilter → AudioBuffer → Phaser Cache
+- **SFX (25个)**：所有游戏音效用振荡器+噪声+滤波器合成，含多级包络和参数变化
+- **BGM (5首)**：五声音阶旋律序列 + 节奏打击层，4秒循环
+- **环境音 (1个)**：带通滤波白噪声模拟西洱河水声
+- **集成方式**：BootScene 异步 `generateAll()` → `scene.cache.audio.add()` → AudioManager 自动发现
+- **兜底机制**：合成失败 → 注册静音占位 AudioBuffer，游戏逻辑不阻塞
 
 - 文件：七擒孟获-像素三国视觉概念
 - 配色：Primary #DC2626 / Background #0F172A / Accent #22C55E

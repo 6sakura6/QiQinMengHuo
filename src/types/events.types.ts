@@ -57,10 +57,14 @@ export enum GameEvent {
   CAMERA_LOCK = 'camera:lock',
   CAMERA_UNLOCK = 'camera:unlock',
 
-  // ---- 音频（Batch 11）----
-  AUDIO_BGM_PLAY  = 'audio:bgmPlay',
-  AUDIO_BGM_STOP  = 'audio:bgmStop',
-  AUDIO_SFX_PLAY  = 'audio:sfxPlay',
+  // ---- 音频（v2 自适应音乐系统）----
+  AUDIO_BGM_PLAY          = 'audio:bgmPlay',
+  AUDIO_BGM_STOP          = 'audio:bgmStop',
+  AUDIO_SFX_PLAY          = 'audio:sfxPlay',
+  AUDIO_INTENSITY_CHANGE  = 'audio:intensityChange',   // 战斗强度变化 → 驱动 BGM 过渡
+  AUDIO_CAPTURE_THEME     = 'audio:captureTheme',      // 触发擒获音乐主题
+  AUDIO_AMBIENCE_PLAY     = 'audio:ambiencePlay',      // 播放环境音
+  AUDIO_AMBIENCE_STOP     = 'audio:ambienceStop',      // 停止环境音
 }
 
 // ============ 事件 Payload 类型映射 ============
@@ -104,8 +108,12 @@ export interface EventPayloadMap {
   [GameEvent.CAMERA_LOCK]: { target: Vec2; duration: number };
   [GameEvent.CAMERA_UNLOCK]: Record<string, never>;
 
-  // ---- 音频（Batch 11）----
-  [GameEvent.AUDIO_BGM_PLAY] : { key: string };
-  [GameEvent.AUDIO_BGM_STOP] : Record<string, never>;
-  [GameEvent.AUDIO_SFX_PLAY] : { key: string; volume?: number };
+  // ---- 音频（v2 自适应音乐系统）----
+  [GameEvent.AUDIO_BGM_PLAY]         : { key: string };
+  [GameEvent.AUDIO_BGM_STOP]         : Record<string, never>;
+  [GameEvent.AUDIO_SFX_PLAY]         : { key: string; volume?: number; position?: { x: number; y: number } };
+  [GameEvent.AUDIO_INTENSITY_CHANGE] : { intensity: number };    // 0.0-1.0 战斗强度
+  [GameEvent.AUDIO_CAPTURE_THEME]    : Record<string, never>;
+  [GameEvent.AUDIO_AMBIENCE_PLAY]    : { key: string; volume?: number };
+  [GameEvent.AUDIO_AMBIENCE_STOP]    : Record<string, never>;
 }

@@ -31,7 +31,7 @@ import { DialogBox } from '../ui/DialogBox';
 import { SaveSystem } from '../systems/SaveSystem';
 import { StorySystem } from '../systems/StorySystem';
 import { ScreenShake } from '../systems/ScreenShake';
-import { AudioManager, SFX, BGM } from '../systems/AudioManager';
+import { AudioManager, SFX, BGM, AMBIENCE } from '../systems/AudioManager';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../config/constants';
 import dialogsData from '../data/dialogs.json';
 import fragmentsData from '../data/fragments.json';
@@ -288,6 +288,29 @@ export class Level1Scene extends Phaser.Scene {
       totalEnemies: this._totalEnemies,
       score: this._score,
     });
+
+    // 🎵 自适应音乐参数更新（v2）
+    this.updateAudioIntensity(delta);
+  }
+
+  /** 计算并推送战斗强度到自适应音乐系统 */
+  private updateAudioIntensity(delta: number): void {
+    let intensity = 0;
+
+    if (this._bossSpawned && this.boss?.active && !this.boss?.isDefeated) {
+      // Boss 战中：根据 Boss 血量阶段设定强度
+      const bossHpRatio = this.boss.hp / this.boss.maxHp;
+      if (bossHpRatio > 0.7)  intensity = 0.75;
+      else if (bossHpRatio > 0.3) intensity = 0.85;
+      else intensity = 1.0;
+    } else if (this._liveEnemies > 0) {
+      // 普通战斗：敌人数量驱动强度
+      intensity = Math.min(0.6, 0.2 + this._liveEnemies * 0.1);
+    }
+    // 无敌人：intensity = 0（探索层）
+
+    this.audioMgr.setCombatIntensity(intensity);
+    this.audioMgr.update(delta);
   }
 
   // ─────────────────────────────────────────────────
@@ -1132,8 +1155,7 @@ export class Level1Scene extends Phaser.Scene {
       console.log(`[Level1Scene] 👑 Boss 击败: ${p.bossId} — 准备进入擒获流程，获得 ${p.scoreValue} 分`);
       this._score += p.scoreValue;
       this.audioMgr.playSfx(SFX.CAPTURE_START);  // 🔊 Boss 被擒音效
-      // 切换为擒获 BGM（若有）
-      // this.audioMgr.playBgm(BGM.BOSS);          // 占位：后续可切换 Boss 被擒 BGM
+      this.audioMgr.triggerCaptureTheme();        // 🎵 v2: 触发擒获主题（所有战斗层淡出，古琴独奏淡入）
 
       // 🛡️ 标记擒获已启动 + 取消 Boss 登场对话
       this._captureStarted = true;
@@ -1446,7 +1468,7 @@ export class Level1Scene extends Phaser.Scene {
       this.boss.activate();
       this.screenShake.bossEntrance();
       this.audioMgr.playSfx(SFX.BOSS_ENTER);     // 🔊 Boss 登场音效
-      this.audioMgr.playBgm(BGM.BOSS);            // 🎵 切换 Boss BGM
+      // 🎵 v2: Boss BGM 由 setCombatIntensity(1.0) 自动触发，无需手动切换
       console.log('[Level1Scene] 👑 Boss 激活！孟获·骑象登场');
       // 🛡️ 自管理延迟（不用 Phaser TimerManager，避免其先于 update() 触发 → 帧序竞争）
       this._bossIntroDelayMs = 800;
@@ -1496,14 +1518,25 @@ export class Level1Scene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────
-  // 音频管理器初始化（Batch 11）
+  // 音频管理器初始化（v2 自适应音乐系统）
   // ─────────────────────────────────────────────────
   private setupAudio(): void {
     this.audioMgr = AudioManager.getInstance();
     this.audioMgr.init(this);
-    // 播放关卡 BGM（资源未加载时静默忽略，不崩溃）
-    this.audioMgr.playBgm(BGM.LEVEL_1);
-    console.log('[Level1Scene] 🎵 AudioManager 初始化完成，BGM 占位启动');
+
+    // 🎵 v2 自适应 BGM：探索 → 交战 → Boss 三层自动过渡
+    this.audioMgr.startAdaptiveBgm({
+      exploreKey: BGM.LEVEL_1,
+      combatKey:  BGM.BOSS,       // 交战层：复用 Boss 主题作为战斗变奏
+      bossKey:    BGM.BOSS,       // Boss 层
+      captureKey: BGM.CAPTURE_THEME,
+      crossfadeSec: 2.0,
+    });
+
+    // 🌿 第1关环境音：平原风声
+    this.audioMgr.playAmbience(AMBIENCE.PLAIN_WIND, 0.25);
+
+    console.log('[Level1Scene] 🎵 v2 自适应 BGM + 环境音启动');
   }
 
   // ═══════════════════════════════════════════════════════════
