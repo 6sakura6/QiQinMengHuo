@@ -11,12 +11,21 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Batch 1：全灰盒，无外部资源需要加载
-    // Batch 3 开始这里会读 asset-manifest.json 并加载精灵/图块
+    // 加载启动场景背景图
+    this.load.image('boot_bg', 'ui/boot_bg.jpg');
   }
 
   create(): void {
     const { width, height } = this.cameras.main;
+
+    // ── 背景图（铺满全屏，保持比例覆盖） ───────────
+    this.add.image(width / 2, height / 2, 'boot_bg')
+      .setDisplaySize(width, height)
+      .setDepth(0);
+
+    // ── 半透明遮罩（提升文字可读性） ────────────────
+    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.35)
+      .setDepth(1);
 
     // ── 初始化全局单例系统 ────────────────────────
     // SaveSystem 在首次 getInstance() 时自动从 localStorage 恢复存档
@@ -32,7 +41,8 @@ export class BootScene extends Phaser.Scene {
         stroke: '#000000',
         strokeThickness: 3,
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(2);
 
     const sub = this.add
       .text(width / 2, height / 2 + 24, '加载中…', {
@@ -40,7 +50,8 @@ export class BootScene extends Phaser.Scene {
         fontSize: '18px',
         color: '#667788',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(2);
 
     // 闪烁动画（像素风 blink）
     this.tweens.add({
