@@ -67,44 +67,39 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   // ================================================================
-  // create — 主入口：11 层视觉元素 + 菜单交互
+  // preload — 加载主菜单背景图
+  // ================================================================
+  preload(): void {
+    this.load.image('menu_bg', 'ui/menu_bg.jpg');
+  }
+
+  // ================================================================
+  // create — 主入口：图片背景 + UI 层 + 菜单交互
   // ================================================================
   create(): void {
     try {
-    // ─── 第 1 层：夜空底色 ──────────────────────────────
+    // ─── 第 1 层：主菜单背景图（全屏覆盖）─────────────
+    const bg = this.add.image(W / 2, H / 2, 'menu_bg')
+      .setOrigin(0.5)
+      .setDisplaySize(W, H)
+      .setDepth(0);
+
+    // 深色遮罩（35% 不透明度），确保文字可读性 + 保持水墨质感
     this.cameras.main.setBackgroundColor('#0F172A');
 
     // 🔧 fadeIn 确保从其他场景过渡时平滑显示
     this.cameras.main.fadeIn(200, 15, 19, 26);
 
-    // ─── 第 2 层：血月 + 像素云 ─────────────────────────
-    this.drawBloodMoon();
+    // ─── 第 2 层：深色渐变遮罩（底部更暗，文字区域清晰）───
+    this.drawBackgroundOverlay();
 
-    // ─── 第 3 层：三层山峦剪影（远 → 中 → 近）───────
-    this.drawMountains();
-
-    // ─── 第 4 层：雾带 ──────────────────────────────────
-    this.drawMistBands();
-
-    // ─── 第 5 层：战旗 "漢" "蜀" ──────────────────────
-    this.drawBanners();
-
-    // ─── 第 6 层：汉军士卒剪影 ──────────────────────────
-    this.drawSoldiers();
-
-    // ─── 第 7 层：主标题 + 副标题 ──────────────────────
+    // ─── 第 3 层：主标题 + 副标题 ──────────────────────
     this.drawTitles();
 
-    // ─── 第 8 层：祥云角花（四角低对比度）─────────────
-    this.drawCornerClouds();
-
-    // ─── 第 9 层：火星粒子（底部上浮）──────────────────
-    this.spawnEmbers();
-
-    // ─── 第 10 层：CRT 扫描线 + 暗角 ───────────────────
+    // ─── 第 4 层：CRT 扫描线 + 暗角 ───────────────────
     this.drawCRTOverlay();
 
-    // ─── 第 11 层：像素四角标记 ─────────────────────────
+    // ─── 第 5 层：像素四角标记 ─────────────────────────
     this.drawPixelCorners();
 
     // ─── 交互层：菜单按钮 + 光标 + 版本 ──────────────
@@ -306,7 +301,7 @@ export class MainMenuScene extends Phaser.Scene {
       fontFamily: '"SimSun", "STSong", serif',
       color: '#FBBF24',
       fontStyle: 'bold',
-    }).setOrigin(0, 0.5).setDepth(6);
+    }).setOrigin(0, 0.5).setDepth(3);
   }
 
   // ================================================================
@@ -401,7 +396,7 @@ export class MainMenuScene extends Phaser.Scene {
       fontSize: '48px',
       fontFamily: '"Press Start 2P", "SimHei", monospace',
       color: '#000000',
-    }).setOrigin(0.5).setDepth(8).setAlpha(0.5);
+    }).setOrigin(0.5).setDepth(2).setAlpha(0.5);
 
     // ── 主标题：朱砂红 + 金色描边（双层实现）──
     // 外层金色描边
@@ -411,7 +406,7 @@ export class MainMenuScene extends Phaser.Scene {
       color: '#FBBF24',
       stroke: '#B45309',
       strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(9);
+    }).setOrigin(0.5).setDepth(3);
 
     // 内层朱砂红
     this.titleText = this.add.text(W / 2, 140, '七  擒  孟  获', {
@@ -420,7 +415,7 @@ export class MainMenuScene extends Phaser.Scene {
       color: '#DC2626',
       stroke: '#7F1D1D',
       strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(10);
+    }).setOrigin(0.5).setDepth(4);
 
     // 标题呼吸动画
     this.tweens.add({
@@ -441,7 +436,7 @@ export class MainMenuScene extends Phaser.Scene {
       color: '#F59E0B',
       stroke: '#000000',
       strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(10).setAlpha(0);
+    }).setOrigin(0.5).setDepth(4).setAlpha(0);
 
     this.tweens.add({
       targets: this.subtitleText,
@@ -452,7 +447,7 @@ export class MainMenuScene extends Phaser.Scene {
     });
 
     // ── 红色分隔线 ──
-    const divider = this.add.graphics().setDepth(10);
+    const divider = this.add.graphics().setDepth(4);
     divider.fillStyle(C.VERMILION, 0.7);
     divider.fillRect(W / 2 - 120, 218, 240, 4);
     // 金色细线点缀
@@ -461,8 +456,37 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   // ================================================================
-  // 第 8 层：祥云角花（四角低对比度像素纹样）
+  // 第 2 层：深色渐变遮罩（确保文字可读 + 保持水墨质感）
   // ================================================================
+  private drawBackgroundOverlay(): void {
+    const overlay = this.add.graphics().setDepth(1);
+
+    // 顶部渐暗（标题区域需要清晰）
+    overlay.fillStyle(0x0F172A, 0.25);
+    overlay.fillRect(0, 0, W, 180);
+
+    // 底部渐暗（菜单按钮区域需要清晰）
+    const bottomGrad = this.add.graphics().setDepth(1);
+    for (let y = H - 140; y < H; y++) {
+      const alpha = 0.35 * ((y - (H - 140)) / 140);
+      bottomGrad.fillStyle(0x0F172A, Math.min(alpha, 0.5));
+      bottomGrad.fillRect(0, y, W, 3);
+    }
+
+    // 左右边缘微暗（视觉聚焦到中心）
+    const edgeL = this.add.graphics().setDepth(1);
+    edgeL.fillStyle(0x0F172A, 0.15);
+    edgeL.fillRect(0, 0, 60, H);
+    const edgeR = this.add.graphics().setDepth(1);
+    edgeR.fillStyle(0x0F172A, 0.15);
+    edgeR.fillRect(W - 60, 0, 60, H);
+
+    // ─── 第 3 层：祥云角花（四角低对比度）─────────────
+    this.drawCornerClouds();
+
+    // ─── 第 4 层：火星粒子（底部上浮）──────────────────
+    this.spawnEmbers();
+  }
   private drawCornerClouds(): void {
     const g = this.add.graphics().setDepth(6);
     const alpha = 0.15;
@@ -526,19 +550,19 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   // ================================================================
-  // 第 10 层：CRT 扫描线 + 暗角
+  // 第 4 层：CRT 扫描线 + 暗角
   // ================================================================
   private drawCRTOverlay(): void {
-    const crt = this.add.graphics().setDepth(90);
+    const crt = this.add.graphics().setDepth(5);
 
     // ── 水平扫描线（2px 每 4px，极低透明度）──
-    crt.fillStyle(0x000000, 0.06);
+    crt.fillStyle(0x000000, 0.04);
     for (let y = 0; y < H; y += 4) {
       crt.fillRect(0, y, W, 2);
     }
 
     // ── 暗角（四条边缘渐变黑带）──
-    const vignette = this.add.graphics().setDepth(91);
+    const vignette = this.add.graphics().setDepth(6);
     // 顶部
     vignette.fillStyle(0x000000, 0.25);
     vignette.fillRect(0, 0, W, 28);
@@ -553,12 +577,12 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   // ================================================================
-  // 第 11 层：像素四角红色标记
+  // 第 5 层：像素四角红色标记
   // ================================================================
   private drawPixelCorners(): void {
     const size = 8;
     const margin = 12;
-    const g = this.add.graphics().setDepth(92);
+    const g = this.add.graphics().setDepth(7);
 
     g.fillStyle(C.VERMILION, 1);
     g.fillRect(margin, margin, size, size);
@@ -606,7 +630,7 @@ export class MainMenuScene extends Phaser.Scene {
       // 按钮背景
       const btnW = isPrimary ? 300 : 200;
       const btnH = isPrimary ? 46 : 36;
-      const btnBg = this.add.graphics().setDepth(11);
+      const btnBg = this.add.graphics().setDepth(8);
 
       if (isPrimary) {
         // 主按钮：双层像素边框（参考设计稿 "[ 开 始 游 戏 ]"）
@@ -640,7 +664,7 @@ export class MainMenuScene extends Phaser.Scene {
         fontSize,
         fontFamily: '"Press Start 2P", monospace',
         color: Phaser.Display.Color.IntegerToColor(color).rgba,
-      }).setOrigin(0.5).setDepth(12).setAlpha(0);
+      }).setOrigin(0.5).setDepth(9).setAlpha(0);
 
       this.optionTexts.push(txt);
 
@@ -665,7 +689,7 @@ export class MainMenuScene extends Phaser.Scene {
       W / 2 - 155, this.menuOptions[0].y,
       '▶',
       { fontSize: '16px', fontFamily: '"Press Start 2P", monospace', color: '#22C55E', stroke: '#000000', strokeThickness: 2 },
-    ).setOrigin(0.5).setDepth(13);
+    ).setOrigin(0.5).setDepth(10);
 
     this.tweens.add({
       targets: this.cursor,
@@ -680,7 +704,7 @@ export class MainMenuScene extends Phaser.Scene {
       fontSize: '10px',
       fontFamily: '"VT323", "Press Start 2P", monospace',
       color: '#64748B',
-    }).setOrigin(1, 1).setDepth(12);
+    }).setOrigin(1, 1).setDepth(9);
   }
 
   // ── 按钮四角闪烁方块 ──
@@ -832,7 +856,7 @@ export class MainMenuScene extends Phaser.Scene {
       color: '#EF4444',
       stroke: '#000000',
       strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(93).setAlpha(0);
+    }).setOrigin(0.5).setDepth(8).setAlpha(0);
 
     this.tweens.add({ targets: confirmTxt, alpha: 1, duration: 200 });
     this.optionTexts[2]?.setColor('#EF4444');
